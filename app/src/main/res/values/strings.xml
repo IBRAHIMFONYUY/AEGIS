@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AEGIS</string>
+    <string name="accessibility_service_description">AEGIS uses Accessibility Service to detect scam messages, phishing attempts, and security threats in real-time across all apps. No personal data is stored or uploaded without your consent.</string>
+    <string name="notification_listener_description">AEGIS monitors notifications to detect scam messages and phishing attempts in SMS and messaging apps.</string>
+    <string name="vpn_service_description">AEGIS VPN Service blocks malicious domains, phishing sites, and known scam servers to protect your connection.</string>
+    <string name="foreground_service_description">AEGIS is running in the background to keep you protected from scams and security threats.</string>
+</resources>

@@ -1,0 +1,93 @@
+package com.aegis.services.foreground
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Intent
+import android.os.IBinder
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import com.aegis.AegisApplication
+import com.aegis.agents.GuardianCore
+import kotlinx.coroutines.*
+
+class AegisForegroundService : Service() {
+
+    companion object {
+        const val CHANNEL_ID = "aegis_protection"
+        const val NOTIFICATION_ID = 1001
+        const val ACTION_STOP = "com.aegis.STOP_FOREGROUND"
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val guardianCore: GuardianCore by lazy { AegisApplication.guardianCore }
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        try {
+            val notification = createNotification()
+            startForeground(NOTIFICATION_ID, notification)
+            startContinuousScanning()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "AEGIS Protection",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "AEGIS is running in the background to protect you"
+                setShowBadge(false)
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("AEGIS Active")
+            .setContentText("Protecting you from scams and threats")
+            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+            .setPriority(NotificationManager.IMPORTANCE_LOW)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun startContinuousScanning() {
+        scope.launch {
+            while (isActive) {
+                performBackgroundScan()
+                delay(10_000)
+            }
+        }
+    }
+
+    private suspend fun performBackgroundScan() {
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        scope.cancel()
+    }
+}
