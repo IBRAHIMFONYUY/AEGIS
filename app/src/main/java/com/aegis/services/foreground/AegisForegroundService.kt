@@ -11,8 +11,11 @@ import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
 import com.aegis.AegisApplication
 import com.aegis.agents.GuardianCore
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class AegisForegroundService : Service() {
 
     companion object {
@@ -22,7 +25,9 @@ class AegisForegroundService : Service() {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val guardianCore: GuardianCore by lazy { AegisApplication.guardianCore }
+    
+    @Inject
+    lateinit var guardianCore: GuardianCore
 
     override fun onCreate() {
         super.onCreate()

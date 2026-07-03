@@ -1,10 +1,13 @@
 package com.aegis.sharedelement
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,18 +25,31 @@ class ShareReceiverActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val sharedText = intent?.getStringExtra(Intent.EXTRA_TEXT) ?: run {
+        val app = application as AegisApplication
+        val guardianCore = app.guardianCore
+
+        val (sharedText, imagePath) = when (intent?.action) {
+            Intent.ACTION_SEND -> {
+                if (intent.type?.startsWith("image/") == true) {
+                    val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+                    null to uri?.let { FileUtil.saveUriToTempFile(this, it) }
+                } else {
+                    intent.getStringExtra(Intent.EXTRA_TEXT) to null
+                }
+            }
+            else -> null to null
+        }
+
+        if (sharedText == null && imagePath == null) {
             finish()
             return
         }
-
-        val app = application as AegisApplication
-        val guardianCore = app.guardianCore
 
         setContent {
             AegisTheme {
                 ShareAnalysisScreen(
                     text = sharedText,
+                    imagePath = imagePath,
                     guardianCore = guardianCore,
                     onDismiss = { finish() }
                 )
@@ -45,7 +61,8 @@ class ShareReceiverActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ShareAnalysisScreen(
-    text: String,
+    text: String?,
+    imagePath: String?,
     guardianCore: com.aegis.agents.GuardianCore,
     onDismiss: () -> Unit
 ) {
@@ -57,7 +74,8 @@ private fun ShareAnalysisScreen(
         val analysisResult = guardianCore.analyze(
             AnalysisContext(
                 text = text,
-                sourceType = SourceType.UNKNOWN,
+                imagePath = imagePath,
+                sourceType = if (imagePath != null) SourceType.IMAGE else SourceType.UNKNOWN,
                 metadata = mapOf("source" to "share_extension")
             )
         )
@@ -82,16 +100,17 @@ private fun ShareAnalysisScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             if (isAnalyzing) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().padding(top = 100.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Analyzing content...")
+                        Text("Analyzing ${if (imagePath != null) "image" else "content"}...")
                     }
                 }
             } else {
@@ -100,12 +119,13 @@ private fun ShareAnalysisScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                        containerColor = if (analysisResult.overallThreatLevel.value >= ThreatLevel.SUSPICIOUS.value)
+                            MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Overall Assessment",
+                            text = "Guardian Assessment",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -119,47 +139,63 @@ private fun ShareAnalysisScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Agent Results",
+                    text = "Detailed Analysis",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 analysisResult.agentResults.forEach { agentResult ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = agentResult.agentName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                ThreatLevelIndicator(threatLevel = agentResult.threatLevel)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = agentResult.reason,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                            if (agentResult.confidence > 0) {
-                                Text(
-                                    text = "Confidence: ${(agentResult.confidence * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
-                        }
+                    if (agentResult.threatLevel != ThreatLevel.SAFE || agentResult.agentName == "GuardianCoach" || agentResult.agentName == "ImageGuardian") {
+                        AgentResultCard(agentResult)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AgentResultCard(agentResult: AgentResult) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = agentResult.agentName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                ThreatLevelIndicator(threatLevel = agentResult.threatLevel)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = agentResult.reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            if (agentResult.confidence > 0) {
+                Text(
+                    text = "Confidence: ${(agentResult.confidence * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+            if (agentResult.suggestedAction != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Action: ${agentResult.suggestedAction}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

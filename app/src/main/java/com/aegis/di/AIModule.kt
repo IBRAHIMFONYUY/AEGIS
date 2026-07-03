@@ -27,22 +27,36 @@ object AIModule {
 
     @Provides
     @Singleton
+    fun provideImageAnalyzer(@ApplicationContext context: Context): ImageAnalyzer =
+        ImageAnalyzer(context)
+
+    @Provides
+    @Singleton
     fun provideGuardianAgents(
         inferenceEngine: CompositeInferenceEngine,
-        reasoningEngine: ReasoningEngine
-    ): List<GuardianAgent> = listOf(
-        ScamAgent(inferenceEngine),
-        PrivacyAgent(inferenceEngine),
-        CyberbullyingAgent(inferenceEngine),
-        MisinformationAgent(inferenceEngine),
-        IntentAgent(inferenceEngine),
-        GuardianCoachAgent(reasoningEngine)
-    )
+        reasoningEngine: ReasoningEngine,
+        imageAnalyzer: ImageAnalyzer
+    ): List<GuardianAgent> {
+        val baseAgents = listOf(
+            ScamAgent(inferenceEngine),
+            PrivacyAgent(inferenceEngine),
+            CyberbullyingAgent(inferenceEngine),
+            MisinformationAgent(inferenceEngine),
+            IntentAgent(inferenceEngine, reasoningEngine),
+            PaymentGuardianAgent(),
+            MalwareGuardianAgent(inferenceEngine)
+        )
+        
+        return baseAgents + listOf(
+            ImageGuardianAgent(imageAnalyzer, baseAgents),
+            GuardianCoachAgent(reasoningEngine)
+        )
+    }
 
     @Provides
     @Singleton
     fun provideGuardianCore(
-        agents: List<GuardianAgent>,
+        agents: @JvmSuppressWildcards List<GuardianAgent>,
         memoryRepository: GuardianMemoryRepository
     ): GuardianCore = GuardianCore(agents, memoryRepository)
 }

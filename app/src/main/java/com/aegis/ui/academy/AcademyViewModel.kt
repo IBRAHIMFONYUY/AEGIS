@@ -64,4 +64,10 @@ class AcademyViewModel @Inject constructor(
     fun startModule(moduleId: String) {
         // Implementation for starting a module
     }
+
+    fun completeModule(moduleId: String, score: Int = 100) {
+        viewModelScope.launch {
+            learningRepository.completeModule(moduleId, score)
+        }
+    }
 }

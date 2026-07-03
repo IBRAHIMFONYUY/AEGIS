@@ -7,12 +7,17 @@ import com.aegis.AegisApplication
 import com.aegis.core.AnalysisContext
 import com.aegis.core.SourceType
 import com.aegis.agents.GuardianCore
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class AegisNotificationListener : NotificationListenerService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val guardianCore: GuardianCore by lazy { AegisApplication.guardianCore }
+    
+    @Inject
+    lateinit var guardianCore: GuardianCore
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName

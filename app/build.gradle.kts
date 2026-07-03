@@ -105,6 +105,7 @@ dependencies {
     implementation("com.google.mediapipe:tasks-genai:0.10.35")
 
     implementation("com.google.mlkit:text-recognition:16.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     implementation("androidx.security:security-crypto:1.0.0")
 

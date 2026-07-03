@@ -3,6 +3,7 @@ package com.aegis.ui.assistant
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,21 +53,21 @@ fun AssistantScreen(
             ) {
                 Column {
                     if (messages.size <= 1) {
-                        Row(
+                        LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            viewModel.getQuickReplies().take(4).forEach { reply ->
+                            val replies = viewModel.getQuickReplies()
+                            items(replies) { reply ->
                                 SuggestionChip(
                                     onClick = {
                                         inputText = reply
                                         viewModel.sendMessage(reply)
                                         inputText = ""
                                     },
-                                    label = { Text(reply, style = MaterialTheme.typography.bodySmall) },
-                                    modifier = Modifier.weight(1f)
+                                    label = { Text(reply, style = MaterialTheme.typography.bodySmall) }
                                 )
                             }
                         }

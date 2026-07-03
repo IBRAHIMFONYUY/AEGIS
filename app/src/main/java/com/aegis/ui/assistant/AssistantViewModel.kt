@@ -63,4 +63,11 @@ class AssistantViewModel @Inject constructor(
             _isTyping.value = false
         }
     }
+
+    fun getQuickReplies(): List<String> = listOf(
+        "Scan my latest messages",
+        "How do I spot a momo scam?",
+        "Check this link",
+        "Enable all protections"
+    )
 }

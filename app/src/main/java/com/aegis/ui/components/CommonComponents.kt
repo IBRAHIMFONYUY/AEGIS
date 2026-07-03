@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aegis.core.ThreatLevel
@@ -73,7 +74,7 @@ fun SafetyScoreCircle(
         modifier = modifier.size(size.dp)
     ) {
         CircularProgressIndicator(
-            progress = score,
+            progress = { score },
             modifier = Modifier.fillMaxSize(),
             color = color,
             strokeWidth = strokeWidth.dp,
@@ -238,5 +239,58 @@ fun StatItem(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
+    }
+}
+
+@Composable
+fun DashboardSOC(
+    guardianCore: com.aegis.agents.GuardianCore,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Guardian Intelligence Status",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(SafeGreen)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                SOCItem(label = "AI Models", value = "${guardianCore.availableAgentCount} Active", icon = Icons.Filled.Memory)
+                SOCItem(label = "Engine", value = "Hybrid V4", icon = Icons.Filled.Bolt)
+                SOCItem(label = "Impact", value = "Low Power", icon = Icons.Filled.BatteryChargingFull)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SOCItem(label: String, value: String, icon: ImageVector) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+        Spacer(modifier = Modifier.width(4.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            Text(value, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        }
     }
 }

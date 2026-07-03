@@ -80,4 +80,24 @@ class SettingsViewModel @Inject constructor(
             _isBackgroundScanning.value = enabled
         }
     }
+
+    fun openAccessibilitySettings() {
+        // Handled in UI
+    }
+
+    fun openNotificationListenerSettings() {
+        // Handled in UI
+    }
+
+    fun openVpnSettings() {
+        // Handled in UI
+    }
+
+    fun startForegroundService() {
+        // Handled in UI
+    }
+
+    fun toggleClipboardMonitor(enabled: Boolean) {
+        // Implementation for clipboard monitor
+    }
 }

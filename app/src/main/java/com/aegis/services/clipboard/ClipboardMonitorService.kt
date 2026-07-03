@@ -8,12 +8,17 @@ import android.os.IBinder
 import com.aegis.agents.GuardianCore
 import com.aegis.core.AnalysisContext
 import com.aegis.core.SourceType
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class ClipboardMonitorService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var guardianCore: GuardianCore? = null
+    
+    @Inject
+    lateinit var guardianCore: GuardianCore
     private var lastClipboardContent: String? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -62,13 +67,9 @@ class ClipboardMonitorService : Service() {
                     sourceType = SourceType.CLIPBOARD,
                     metadata = mapOf("source" to "clipboard_monitor")
                 )
-                guardianCore?.analyze(context)
+                guardianCore.analyze(context)
             }
         }
-    }
-
-    fun setGuardianCore(core: GuardianCore) {
-        guardianCore = core
     }
 
     override fun onDestroy() {

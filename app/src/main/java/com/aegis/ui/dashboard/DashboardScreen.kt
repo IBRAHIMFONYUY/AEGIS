@@ -111,6 +111,10 @@ fun DashboardScreen(
             }
 
             item {
+                DashboardSOC(guardianCore = guardianCore, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+
+            item {
                 Spacer(modifier = Modifier.height(8.dp))
                 SectionHeader("Quick Actions")
             }
@@ -178,6 +182,16 @@ fun DashboardScreen(
             }
 
             if (recentThreats.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SectionHeader("Live Risk Graph")
+                }
+                item {
+                    RiskRelationGraph(
+                        threat = recentThreats.first(),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     SectionHeader("Recent Threats")
