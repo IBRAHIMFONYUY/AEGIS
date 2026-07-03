@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.aegis.agents.GuardianCore
 import com.aegis.data.db.entity.LearningProgress
 import com.aegis.data.repository.LearningRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class AcademyViewModel(
+@HiltViewModel
+class AcademyViewModel @Inject constructor(
     private val learningRepository: LearningRepository,
     private val guardianCore: GuardianCore
 ) : ViewModel() {
@@ -38,111 +41,27 @@ class AcademyViewModel(
                 _completedCount.value = count
             }
         }
+        
         viewModelScope.launch {
-            learningRepository.getTotalScore().collect { score ->
-                _totalScore.value = score ?: 0
-            }
-        }
-        loadProgress()
-    }
-
-    private fun loadProgress() {
-        viewModelScope.launch {
-            learningRepository.getAllModules().collect { dbModules ->
-                _modules.value = defaultModules().map { module ->
-                    val dbProgress = dbModules.find { it.moduleId == module.id }
-                    module.copy(progress = dbProgress)
+            learningRepository.getAllModules().collect { progressList ->
+                val currentModules = _modules.value.map { module ->
+                    module.copy(progress = progressList.find { it.moduleId == module.id })
                 }
+                _modules.value = currentModules
+                _totalScore.value = progressList.sumOf { it.score }
             }
-        }
-    }
-
-    fun completeModule(moduleId: String, score: Int) {
-        viewModelScope.launch {
-            learningRepository.completeModule(moduleId, score)
         }
     }
 
     private fun defaultModules() = listOf(
-        AcademyModule(
-            id = "phishing_101",
-            title = "Phishing 101",
-            description = "Learn to identify and avoid phishing attempts",
-            icon = "🎣",
-            difficulty = "Beginner",
-            estimatedMinutes = 10
-        ),
-        AcademyModule(
-            id = "password_security",
-            title = "Password Security",
-            description = "Create strong passwords and manage them safely",
-            icon = "🔑",
-            difficulty = "Beginner",
-            estimatedMinutes = 8
-        ),
-        AcademyModule(
-            id = "social_engineering",
-            title = "Social Engineering",
-            description = "Understand how attackers manipulate people",
-            icon = "🎭",
-            difficulty = "Intermediate",
-            estimatedMinutes = 15
-        ),
-        AcademyModule(
-            id = "safe_browsing",
-            title = "Safe Browsing",
-            description = "Browse the web safely and avoid malicious sites",
-            icon = "🌐",
-            difficulty = "Beginner",
-            estimatedMinutes = 10
-        ),
-        AcademyModule(
-            id = "mobile_security",
-            title = "Mobile Security",
-            description = "Secure your smartphone against threats",
-            icon = "📱",
-            difficulty = "Intermediate",
-            estimatedMinutes = 12
-        ),
-        AcademyModule(
-            id = "scam_awareness",
-            title = "Scam Awareness",
-            description = "Recognize common scam tactics and protect yourself",
-            icon = "⚠️",
-            difficulty = "Beginner",
-            estimatedMinutes = 10
-        ),
-        AcademyModule(
-            id = "privacy_matters",
-            title = "Privacy Matters",
-            description = "Protect your personal data and privacy online",
-            icon = "🔒",
-            difficulty = "Intermediate",
-            estimatedMinutes = 15
-        ),
-        AcademyModule(
-            id = "incident_response",
-            title = "Incident Response",
-            description = "What to do when you encounter a security threat",
-            icon = "🚨",
-            difficulty = "Advanced",
-            estimatedMinutes = 20
-        ),
-        AcademyModule(
-            id = "digital_patriot",
-            title = "Digital Patriot",
-            description = "Become a champion of cybersecurity in your community",
-            icon = "🛡️",
-            difficulty = "Advanced",
-            estimatedMinutes = 25
-        ),
-        AcademyModule(
-            id = "misinformation",
-            title = "Fake News Detection",
-            description = "Learn to spot misinformation and verify facts",
-            icon = "📰",
-            difficulty = "Intermediate",
-            estimatedMinutes = 15
-        )
+        AcademyModule("phishing_101", "Phishing Basics", "Learn how to spot common phishing attempts.", "hook", "Beginner", 10),
+        AcademyModule("scam_calls", "Scam Call Defense", "Identify and handle fraudulent phone calls.", "phone", "Beginner", 15),
+        AcademyModule("malware_aware", "Malware Awareness", "Protect your device from malicious apps.", "bug", "Intermediate", 20),
+        AcademyModule("privacy_settings", "Data Privacy", "Master your Android privacy settings.", "lock", "Intermediate", 15),
+        AcademyModule("ai_security", "Future of AI Security", "How AI helps and hurts cybersecurity.", "robot", "Advanced", 30)
     )
+
+    fun startModule(moduleId: String) {
+        // Implementation for starting a module
+    }
 }

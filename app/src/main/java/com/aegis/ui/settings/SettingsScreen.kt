@@ -11,7 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aegis.agents.GuardianCore
 import com.aegis.data.repository.SettingsRepository
 import com.aegis.ui.components.*
@@ -21,21 +21,9 @@ import com.aegis.ui.theme.*
 @Composable
 fun SettingsScreen(
     settingsRepository: SettingsRepository,
-    guardianCore: GuardianCore
+    guardianCore: GuardianCore,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
-    val viewModel: SettingsViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return SettingsViewModel(
-                    settingsRepository,
-                    guardianCore,
-                    context
-                ) as T
-            }
-        }
-    )
     val services by viewModel.services.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
     val isRealTimeScanning by viewModel.isRealTimeScanning.collectAsState()

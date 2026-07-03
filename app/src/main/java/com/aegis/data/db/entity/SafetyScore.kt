@@ -7,6 +7,10 @@ import androidx.room.PrimaryKey
 data class SafetyScore(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val score: Float,
+    val privacyScore: Float = 1.0f,
+    val scamScore: Float = 1.0f,
+    val deviceScore: Float = 1.0f,
+    val wellbeingScore: Float = 1.0f,
     val totalThreats: Int,
     val blockedThreats: Int,
     val userActions: Int,

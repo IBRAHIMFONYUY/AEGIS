@@ -11,7 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aegis.agents.GuardianCore
 import com.aegis.data.repository.LearningRepository
 import com.aegis.ui.components.*
@@ -22,14 +22,7 @@ import com.aegis.ui.theme.*
 fun AcademyScreen(
     learningRepository: LearningRepository,
     guardianCore: GuardianCore,
-    viewModel: AcademyViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return AcademyViewModel(learningRepository, guardianCore) as T
-            }
-        }
-    )
+    viewModel: AcademyViewModel = hiltViewModel()
 ) {
     val modules by viewModel.modules.collectAsState()
     val completedCount by viewModel.completedCount.collectAsState()

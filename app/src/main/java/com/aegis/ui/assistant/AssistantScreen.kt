@@ -14,7 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aegis.agents.GuardianCore
 import com.aegis.ui.components.GradientTopBar
 import com.aegis.ui.theme.*
@@ -23,14 +23,7 @@ import com.aegis.ui.theme.*
 @Composable
 fun AssistantScreen(
     guardianCore: GuardianCore,
-    viewModel: AssistantViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return AssistantViewModel(guardianCore) as T
-            }
-        }
-    )
+    viewModel: AssistantViewModel = hiltViewModel()
 ) {
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()

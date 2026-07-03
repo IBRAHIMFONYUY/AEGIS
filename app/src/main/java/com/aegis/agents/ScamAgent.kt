@@ -49,13 +49,19 @@ class ScamAgent(
 
             val ruleBasedScore = ruleBasedAnalysis(text, url)
             val mlScore = inferenceEngine?.let { mlAnalysis(text) } ?: 0f
+            
+            // Context Engine additions
+            var contextMultiplier = 1.0f
+            if (context.isUnknownSender) contextMultiplier += 0.3f
+            if (context.appRiskScore > 0.5f) contextMultiplier += 0.2f
+            if (context.sourceType == SourceType.SMS) contextMultiplier += 0.1f
 
             val ignoreCount = memory?.getLatest("GLOBAL_IGNORE_COUNT")?.toIntOrNull() ?: 0
             val behavioralMultiplier = if (ignoreCount > 3) 1.2f else 1.0f
 
-            val combinedScore = (ruleBasedScore * 0.6f + mlScore * 0.4f) * behavioralMultiplier
+            val combinedScore = (ruleBasedScore * 0.6f + mlScore * 0.4f) * behavioralMultiplier * contextMultiplier
             val threatLevel = scoreToThreatLevel(combinedScore)
-            val reason = buildReason(threatLevel, combinedScore, ignoreCount > 3)
+            val reason = buildReason(threatLevel, combinedScore, ignoreCount > 3, context.isUnknownSender)
 
             AgentResult(
                 agentName = name,
@@ -66,7 +72,9 @@ class ScamAgent(
                     "ruleScore" to ruleBasedScore.toString(),
                     "mlScore" to mlScore.toString(),
                     "keywords" to matchedKeywords(text).joinToString(","),
-                    "behavioralMultiplier" to behavioralMultiplier.toString()
+                    "contextMultiplier" to contextMultiplier.toString(),
+                    "behavioralMultiplier" to behavioralMultiplier.toString(),
+                    "isUnknownSender" to context.isUnknownSender.toString()
                 ),
                 suggestedAction = suggestedAction(threatLevel, ignoreCount > 3),
                 requiresUserAttention = threatLevel.value >= ThreatLevel.MALICIOUS.value
@@ -113,7 +121,7 @@ class ScamAgent(
         else -> ThreatLevel.SAFE
     }
 
-    private fun buildReason(level: ThreatLevel, score: Float, isHighRiskBehavior: Boolean): String {
+    private fun buildReason(level: ThreatLevel, score: Float, isHighRiskBehavior: Boolean, isUnknownSender: Boolean): String {
         val baseReason = when (level) {
             ThreatLevel.SAFE -> "No scam indicators detected"
             ThreatLevel.SUSPICIOUS -> "Some scam-like patterns found (${(score * 100).toInt()}% confidence)"
@@ -121,10 +129,15 @@ class ScamAgent(
             ThreatLevel.MALICIOUS -> "Strong scam signature detected — high probability of phishing or fraud"
             ThreatLevel.CRITICAL -> "Critical scam threat detected — immediate attention recommended"
         }
+        
+        val contextInfo = if (isUnknownSender && level.value >= ThreatLevel.SUSPICIOUS.value) {
+            " from an unknown sender"
+        } else ""
+
         return if (isHighRiskBehavior && level.value >= ThreatLevel.SUSPICIOUS.value) {
-            "⚠ $baseReason (Sensitivity increased due to recent ignored alerts)"
+            "⚠ $baseReason$contextInfo (Sensitivity increased due to recent ignored alerts)"
         } else {
-            baseReason
+            "$baseReason$contextInfo"
         }
     }
 

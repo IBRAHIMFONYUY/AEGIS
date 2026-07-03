@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -98,8 +99,10 @@ dependencies {
 
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
 
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("com.google.ai.edge.litert:litert:1.0.1")
+    implementation("com.google.ai.edge.litert:litert-support:1.0.1")
+
+    implementation("com.google.mediapipe:tasks-genai:0.10.35")
 
     implementation("com.google.mlkit:text-recognition:16.0.0")
 
@@ -108,6 +111,11 @@ dependencies {
     implementation("com.google.android.play:integrity:1.3.0")
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Hilt
+    implementation("com.google.dagger:hilt-android:2.54")
+    ksp("com.google.dagger:hilt-android-compiler:2.54")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 

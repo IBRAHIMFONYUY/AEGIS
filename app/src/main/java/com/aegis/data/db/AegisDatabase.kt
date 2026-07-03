@@ -16,7 +16,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         AppSettings::class,
         MemoryEntry::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AegisDatabase : RoomDatabase() {

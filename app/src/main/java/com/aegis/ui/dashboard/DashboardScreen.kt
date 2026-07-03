@@ -11,7 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.aegis.agents.GuardianCore
 import com.aegis.data.repository.SafetyRepository
@@ -27,18 +27,11 @@ fun DashboardScreen(
     safetyRepository: SafetyRepository,
     threatRepository: ThreatRepository,
     navController: NavController,
-    viewModel: DashboardViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return DashboardViewModel(
-                    guardianCore, safetyRepository, threatRepository
-                ) as T
-            }
-        }
-    )
+    viewModel: DashboardViewModel = hiltViewModel()
 ) {
-    val safetyScore by viewModel.safetyScore.collectAsState()
+    val safetyScoreData by viewModel.safetyScore.collectAsState()
+    val overallScore = safetyScoreData?.score ?: 1.0f
+    
     val recentThreats by viewModel.recentThreats.collectAsState()
     val activeThreatCount by viewModel.activeThreatCount.collectAsState()
     val totalScans by viewModel.totalScans.collectAsState()
@@ -73,18 +66,24 @@ fun DashboardScreen(
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    SafetyScoreCircle(score = safetyScore, size = 140)
+                    SafetyScoreCircle(score = overallScore, size = 140)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Your device is ${if (safetyScore >= 0.8f) "Protected" else if (safetyScore >= 0.5f) "At Risk" else "Vulnerable"}",
+                        text = "Your device is ${if (overallScore >= 0.8f) "Protected" else if (overallScore >= 0.5f) "At Risk" else "Vulnerable"}",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${(safetyScore * 100).toInt()}% Safety Score",
+                        text = "${(overallScore * 100).toInt()}% Guardian Score",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
+                }
+            }
+
+            item {
+                if (safetyScoreData != null) {
+                    GuardianScoreGrid(safetyScoreData!!)
                 }
             }
 
@@ -191,6 +190,39 @@ fun DashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(80.dp))
             }
+        }
+    }
+}
+
+@Composable
+fun GuardianScoreGrid(score: com.aegis.data.db.entity.SafetyScore) {
+    Column(modifier = Modifier.padding(16.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ScoreMiniCard(label = "Privacy", score = score.privacyScore, modifier = Modifier.weight(1f))
+            ScoreMiniCard(label = "Scams", score = score.scamScore, modifier = Modifier.weight(1f))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ScoreMiniCard(label = "Device", score = score.deviceScore, modifier = Modifier.weight(1f))
+            ScoreMiniCard(label = "Wellbeing", score = score.wellbeingScore, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+fun ScoreMiniCard(label: String, score: Float, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(text = label, style = MaterialTheme.typography.labelMedium)
+            LinearProgressIndicator(
+                progress = score,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                color = if (score >= 0.8f) SafeGreen else if (score >= 0.5f) WarningOrange else DangerRed
+            )
+            Text(text = "${(score * 100).toInt()}%", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
     }
 }

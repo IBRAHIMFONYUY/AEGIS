@@ -3,22 +3,22 @@ package com.aegis.ui.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.agents.GuardianCore
-import com.aegis.core.AnalysisResult
-import com.aegis.core.ThreatLevel
 import com.aegis.data.repository.SafetyRepository
 import com.aegis.data.repository.ThreatRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import javax.inject.Inject
 
-class DashboardViewModel(
+@HiltViewModel
+class DashboardViewModel @Inject constructor(
     private val guardianCore: GuardianCore,
     private val safetyRepository: SafetyRepository,
     private val threatRepository: ThreatRepository
 ) : ViewModel() {
 
-    val safetyScore: StateFlow<Float> = safetyRepository.getLatestScore()
-        .map { it?.score ?: 1.0f }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
+    val safetyScore: StateFlow<com.aegis.data.db.entity.SafetyScore?> = safetyRepository.getLatestScore()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val recentThreats: StateFlow<List<com.aegis.data.db.entity.ThreatEvent>> = threatRepository.getRecentThreats(1)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

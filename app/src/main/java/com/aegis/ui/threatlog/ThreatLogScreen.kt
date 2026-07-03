@@ -9,7 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aegis.core.ThreatLevel
 import com.aegis.data.repository.ThreatRepository
 import com.aegis.ui.components.*
@@ -18,14 +18,7 @@ import com.aegis.ui.components.*
 @Composable
 fun ThreatLogScreen(
     threatRepository: ThreatRepository,
-    viewModel: ThreatLogViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return ThreatLogViewModel(threatRepository) as T
-            }
-        },
-    )
+    viewModel: ThreatLogViewModel = hiltViewModel()
 ) {
     val filterLevel by viewModel.filterLevel.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()

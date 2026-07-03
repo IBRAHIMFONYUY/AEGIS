@@ -15,12 +15,27 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import com.aegis.AegisApplication
+import com.aegis.agents.GuardianCore
+import com.aegis.data.repository.*
 import com.aegis.services.foreground.AegisForegroundService
 import com.aegis.ui.navigation.AegisNavGraph
 import com.aegis.ui.theme.AegisTheme
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var guardianCore: GuardianCore
+    @Inject
+    lateinit var threatRepository: ThreatRepository
+    @Inject
+    lateinit var safetyRepository: SafetyRepository
+    @Inject
+    lateinit var learningRepository: LearningRepository
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -34,12 +49,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val app = application as AegisApplication
-
         setContent {
-            val settingsRepository = app.settingsRepository
             val isDarkMode by settingsRepository.observeString(
-                com.aegis.data.repository.SettingsRepository.KEY_DARK_MODE
+                SettingsRepository.KEY_DARK_MODE
             ).collectAsState(initial = null)
 
             val darkTheme = isDarkMode?.value?.toBooleanStrictOrNull() ?: false
@@ -47,11 +59,11 @@ class MainActivity : ComponentActivity() {
             AegisTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AegisNavGraph(
-                        guardianCore = app.guardianCore,
-                        threatRepository = app.threatRepository,
-                        safetyRepository = app.safetyRepository,
-                        learningRepository = app.learningRepository,
-                        settingsRepository = app.settingsRepository
+                        guardianCore = guardianCore,
+                        threatRepository = threatRepository,
+                        safetyRepository = safetyRepository,
+                        learningRepository = learningRepository,
+                        settingsRepository = settingsRepository
                     )
                 }
             }

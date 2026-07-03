@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.aegis.core.ThreatLevel
 import com.aegis.data.db.entity.ThreatEvent
 import com.aegis.data.repository.ThreatRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class ThreatLogViewModel(
+@HiltViewModel
+class ThreatLogViewModel @Inject constructor(
     private val threatRepository: ThreatRepository
 ) : ViewModel() {
 
