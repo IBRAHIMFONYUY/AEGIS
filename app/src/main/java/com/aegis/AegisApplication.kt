@@ -31,6 +31,8 @@ class AegisApplication : Application() {
         private set
     lateinit var settingsRepository: SettingsRepository
         private set
+    lateinit var memoryRepository: GuardianMemoryRepository
+        private set
     lateinit var inferenceEngine: CompositeInferenceEngine
         private set
     lateinit var overlayManager: ThreatOverlayManager
@@ -73,6 +75,7 @@ class AegisApplication : Application() {
             safetyRepository = SafetyRepository(database.safetyScoreDao())
             learningRepository = LearningRepository(database.learningDao())
             settingsRepository = SettingsRepository(database.settingsDao())
+            memoryRepository = GuardianMemoryRepository(database.memoryDao())
         } catch (e: Exception) {
             // Close the instance if it exists to release file locks
             AegisDatabase.closeDatabase()
@@ -92,6 +95,7 @@ class AegisApplication : Application() {
             safetyRepository = SafetyRepository(database.safetyScoreDao())
             learningRepository = LearningRepository(database.learningDao())
             settingsRepository = SettingsRepository(database.settingsDao())
+            memoryRepository = GuardianMemoryRepository(database.memoryDao())
         }
     }
 
@@ -132,9 +136,10 @@ class AegisApplication : Application() {
             PrivacyAgent(inferenceEngine),
             CyberbullyingAgent(inferenceEngine),
             MisinformationAgent(inferenceEngine),
-            IntentAgent(inferenceEngine)
+            IntentAgent(inferenceEngine),
+            GuardianCoachAgent(null) // TODO: Implement reasoning engine
         )
-        guardianCore = GuardianCore(agents)
+        guardianCore = GuardianCore(agents, memoryRepository)
     }
 
     companion object {
