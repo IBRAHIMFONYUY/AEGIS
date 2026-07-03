@@ -7,10 +7,11 @@ import com.aegis.data.db.AegisDatabase
 import com.aegis.data.repository.*
 import com.aegis.security.CryptoManager
 import com.aegis.security.KeyStoreManager
-import com.aegis.services.foreground.AegisForegroundService
 import com.aegis.services.workmanager.ScanWorker
 import com.aegis.services.overlay.ThreatOverlayManager
+import com.aegis.ai.SimpleReasoningEngine
 import kotlinx.coroutines.*
+import net.zetetic.database.sqlcipher.SQLiteDatabase
 import java.io.File
 
 class AegisApplication : Application() {
@@ -43,8 +44,6 @@ class AegisApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        // Load SQLCipher native library
-        System.loadLibrary("sqlcipher")
 
         overlayManager = ThreatOverlayManager(this)
         initializeSecurity()
@@ -76,7 +75,7 @@ class AegisApplication : Application() {
             learningRepository = LearningRepository(database.learningDao())
             settingsRepository = SettingsRepository(database.settingsDao())
             memoryRepository = GuardianMemoryRepository(database.memoryDao())
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Close the instance if it exists to release file locks
             AegisDatabase.closeDatabase()
             
@@ -131,13 +130,14 @@ class AegisApplication : Application() {
     }
 
     private fun initializeAgents() {
+        val reasoningEngine = SimpleReasoningEngine()
         val agents = listOf(
             ScamAgent(inferenceEngine),
             PrivacyAgent(inferenceEngine),
             CyberbullyingAgent(inferenceEngine),
             MisinformationAgent(inferenceEngine),
             IntentAgent(inferenceEngine),
-            GuardianCoachAgent(null) // TODO: Implement reasoning engine
+            GuardianCoachAgent(reasoningEngine)
         )
         guardianCore = GuardianCore(agents, memoryRepository)
     }
@@ -151,8 +151,5 @@ class AegisApplication : Application() {
             
         val guardianCore: GuardianCore
             get() = getInstance().guardianCore
-            
-        val inferenceEngine: CompositeInferenceEngine
-            get() = getInstance().inferenceEngine
     }
 }

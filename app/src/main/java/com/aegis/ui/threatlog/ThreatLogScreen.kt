@@ -24,7 +24,7 @@ fun ThreatLogScreen(
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                 return ThreatLogViewModel(threatRepository) as T
             }
-        }
+        },
     )
 ) {
     val filterLevel by viewModel.filterLevel.collectAsState()
