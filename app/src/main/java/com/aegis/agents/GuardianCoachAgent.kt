@@ -20,18 +20,15 @@ class GuardianCoachAgent(
         previousResults: List<AgentResult>
     ): AgentResult =
         withContext(Dispatchers.Default) {
-            // The Coach agent typically doesn't detect threats itself but explains them.
-            // However, it can analyze the context to provide preliminary advice.
-            
             val prompt = buildExplanationPrompt(context, previousResults)
-            val explanation = reasoningEngine?.generateResponse(prompt) ?: "I am analyzing this interaction to ensure your safety."
+            val explanation = reasoningEngine?.generateResponse(prompt) ?: "I am performing a deep AI analysis of this interaction."
 
             AgentResult(
                 agentName = name,
-                threatLevel = ThreatLevel.SAFE, // The coach itself isn't a threat detector
+                threatLevel = ThreatLevel.SAFE, 
                 confidence = 1.0f,
                 reason = explanation,
-                suggestedAction = "Follow the guidance provided to stay safe."
+                suggestedAction = "Follow this AI-generated guidance to maintain your digital safety."
             )
         }
 

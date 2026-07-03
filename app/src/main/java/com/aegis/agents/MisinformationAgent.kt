@@ -66,10 +66,11 @@ class MisinformationAgent(
         val hasAuthoritySource = authorityMatches > 0
         val mlScore = inferenceEngine?.classify(text, "misinformation") ?: 0f
 
+        // Increased weight for AI/ML analysis (0.7 vs 0.3)
         val combinedScore = if (hasAuthoritySource) {
-            (signalScore * 0.3f + emotionalScore * 0.2f + mlScore * 0.5f - 0.2f).coerceIn(0f, 1f)
+            (signalScore * 0.2f + emotionalScore * 0.1f + mlScore * 0.7f - 0.2f).coerceIn(0f, 1f)
         } else {
-            (signalScore * 0.5f + emotionalScore * 0.2f + mlScore * 0.3f).coerceIn(0f, 1f)
+            (signalScore * 0.2f + emotionalScore * 0.1f + mlScore * 0.7f).coerceIn(0f, 1f)
         }
 
         val threatLevel = scoreToThreatLevel(combinedScore)

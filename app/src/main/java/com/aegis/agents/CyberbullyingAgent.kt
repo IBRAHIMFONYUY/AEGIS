@@ -58,7 +58,8 @@ class CyberbullyingAgent(
         val mlScore = inferenceEngine?.classify(text, "toxicity") ?: 0f
 
         val patternScore = computeScore(matchedCategories)
-        val combinedScore = (patternScore * 0.6f + mlScore * 0.4f)
+        // Increased weight for AI/ML analysis (0.8 vs 0.2)
+        val combinedScore = (patternScore * 0.2f + mlScore * 0.8f)
         val threatLevel = scoreToThreatLevel(combinedScore)
 
         val categoryLabels = matchedCategories.keys.joinToString(", ")

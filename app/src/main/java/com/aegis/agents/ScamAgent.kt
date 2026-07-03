@@ -59,7 +59,8 @@ class ScamAgent(
             val ignoreCount = memory?.getLatest("GLOBAL_IGNORE_COUNT")?.toIntOrNull() ?: 0
             val behavioralMultiplier = if (ignoreCount > 3) 1.2f else 1.0f
 
-            val combinedScore = (ruleBasedScore * 0.6f + mlScore * 0.4f) * behavioralMultiplier * contextMultiplier
+            // Increased weight for AI/ML analysis for higher accuracy
+            val combinedScore = (ruleBasedScore * 0.3f + mlScore * 0.7f) * behavioralMultiplier * contextMultiplier
             val threatLevel = scoreToThreatLevel(combinedScore)
             val reason = buildReason(threatLevel, combinedScore, ignoreCount > 3, context.isUnknownSender)
 

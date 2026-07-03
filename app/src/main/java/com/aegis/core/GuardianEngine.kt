@@ -32,13 +32,14 @@ class GuardianEngine(
         val overallThreat = computeOverallThreat(fastResults)
         val finalResults = fastResults.toMutableList()
 
-        // Step 2: Run deep reasoning (Coach) if a threat is detected
-        if (overallThreat.value >= ThreatLevel.SUSPICIOUS.value && coachAgent?.isAvailable() == true) {
+        // Step 2: Run deep reasoning (Coach) for comprehensive AI analysis
+        // We run it if overall threat is at least SUSPICIOUS, or if explicitly requested for accuracy
+        if ((overallThreat.value >= ThreatLevel.SUSPICIOUS.value || context.metadata.containsKey("deep_scan")) 
+            && coachAgent?.isAvailable() == true) {
             try {
                 val coachResult = coachAgent.analyze(context, memory, fastResults)
                 finalResults.add(coachResult)
             } catch (_: Exception) {
-                // Silently fail coach if reasoning engine is busy or fails
             }
         }
 
