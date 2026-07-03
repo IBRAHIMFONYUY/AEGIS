@@ -25,7 +25,7 @@ class AssistantViewModel @Inject constructor(
     private val _messages = MutableStateFlow<List<ChatMessage>>(
         listOf(
             ChatMessage(
-                text = "Hello! I am AEGIS, your Autonomous Ethical Guardian. I've been monitoring your device for threats. How can I assist your digital safety today?",
+                text = "Hello! I am your AEGIS AI Guardian. I monitor your digital world to keep you and your data safe. How can I help you make a safe decision today?",
                 isUser = false
             )
         )
@@ -65,9 +65,10 @@ class AssistantViewModel @Inject constructor(
     }
 
     fun getQuickReplies(): List<String> = listOf(
-        "Scan my latest messages",
-        "How do I spot a momo scam?",
-        "Check this link",
-        "Enable all protections"
+        "Is this WhatsApp message a scam?",
+        "Can I trust this banking website?",
+        "Why is this app requesting my microphone?",
+        "Should I install this APK?",
+        "Check my latest security alerts"
     )
 }

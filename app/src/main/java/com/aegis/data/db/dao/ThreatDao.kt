@@ -18,6 +18,15 @@ interface ThreatDao {
     @Query("SELECT * FROM threat_events WHERE timestamp > :since ORDER BY timestamp DESC")
     fun getThreatsSince(since: Long): Flow<List<ThreatEvent>>
 
+    @Query("SELECT COUNT(*) FROM threat_events WHERE agentName = 'ScamAgent' AND timestamp >= :since")
+    fun getScamsBlockedCount(since: Long): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM threat_events WHERE (reason LIKE '%link%' OR details LIKE '%url%') AND timestamp >= :since")
+    fun getLinksBlockedCount(since: Long): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM threat_events WHERE agentName = 'MisinformationAgent' AND timestamp >= :since")
+    fun getFakeNewsDetectedCount(since: Long): Flow<Int>
+
     @Query("SELECT COUNT(*) FROM threat_events WHERE threatLevel >= 3")
     fun getCriticalThreatCount(): Flow<Int>
 

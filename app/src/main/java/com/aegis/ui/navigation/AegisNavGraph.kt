@@ -1,10 +1,13 @@
 package com.aegis.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -21,21 +24,22 @@ import com.aegis.ui.assistant.AssistantScreen
 import com.aegis.ui.dashboard.DashboardScreen
 import com.aegis.ui.settings.SettingsScreen
 import com.aegis.ui.threatlog.ThreatLogScreen
+import com.aegis.ui.vault.VaultScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
-    data object Dashboard : Screen("dashboard", "Dashboard", Icons.Filled.Dashboard)
-    data object ThreatLog : Screen("threat_log", "Threat Log", Icons.Filled.Warning)
-    data object Assistant : Screen("assistant", "AI Assistant", Icons.Filled.SmartToy)
-    data object Academy : Screen("academy", "Academy", Icons.Filled.School)
-    data object Settings : Screen("settings", "Settings", Icons.Filled.Settings)
+    data object Dashboard : Screen("dashboard", "Guardian", Icons.Filled.Shield)
+    data object Assistant : Screen("assistant", "AI Guardian", Icons.Filled.SmartToy)
+    data object Privacy : Screen("privacy", "Privacy", Icons.Filled.Lock)
+    data object Vault : Screen("vault", "Vault", Icons.Filled.Https)
+    data object ThreatIntel : Screen("threat_intel", "Threat Intel", Icons.Filled.Public)
 }
 
 val bottomNavItems = listOf(
     Screen.Dashboard,
-    Screen.ThreatLog,
     Screen.Assistant,
-    Screen.Academy,
-    Screen.Settings
+    Screen.Privacy,
+    Screen.Vault,
+    Screen.ThreatIntel
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,24 +90,22 @@ fun AegisNavGraph(
                     navController = navController
                 )
             }
-            composable(Screen.ThreatLog.route) {
-                ThreatLogScreen(
-                    threatRepository = threatRepository
-                )
-            }
             composable(Screen.Assistant.route) {
                 AssistantScreen(guardianCore = guardianCore)
             }
-            composable(Screen.Academy.route) {
+            composable(Screen.Privacy.route) {
+                // Using AcademyScreen as a placeholder for Privacy for now, or I can create a new one
                 AcademyScreen(
                     learningRepository = learningRepository,
                     guardianCore = guardianCore
                 )
             }
-            composable(Screen.Settings.route) {
-                SettingsScreen(
-                    settingsRepository = settingsRepository,
-                    guardianCore = guardianCore
+            composable(Screen.Vault.route) {
+                VaultScreen()
+            }
+            composable(Screen.ThreatIntel.route) {
+                ThreatLogScreen(
+                    threatRepository = threatRepository
                 )
             }
         }

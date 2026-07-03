@@ -5,6 +5,7 @@ import com.aegis.agents.*
 import com.aegis.ai.*
 import com.aegis.core.GuardianAgent
 import com.aegis.data.repository.GuardianMemoryRepository
+import com.aegis.network.ThreatIntelClient
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,7 +24,15 @@ object AIModule {
 
     @Provides
     @Singleton
-    fun provideReasoningEngine(): ReasoningEngine = SimpleReasoningEngine()
+    fun provideReasoningEngine(
+        @ApplicationContext context: Context,
+        modelManager: ModelManager
+    ): ReasoningEngine = OnnxReasoningEngine(context, modelManager)
+
+    @Provides
+    @Singleton
+    fun provideModelManager(@ApplicationContext context: Context): ModelManager =
+        ModelManager(context)
 
     @Provides
     @Singleton
@@ -35,16 +44,17 @@ object AIModule {
     fun provideGuardianAgents(
         inferenceEngine: CompositeInferenceEngine,
         reasoningEngine: ReasoningEngine,
-        imageAnalyzer: ImageAnalyzer
+        imageAnalyzer: ImageAnalyzer,
+        threatIntelClient: ThreatIntelClient
     ): List<GuardianAgent> {
         val baseAgents = listOf(
-            ScamAgent(inferenceEngine),
+            ScamAgent(inferenceEngine, threatIntelClient),
             PrivacyAgent(inferenceEngine),
             CyberbullyingAgent(inferenceEngine),
             MisinformationAgent(inferenceEngine),
             IntentAgent(inferenceEngine, reasoningEngine),
             PaymentGuardianAgent(),
-            MalwareGuardianAgent(inferenceEngine)
+            MalwareGuardianAgent(inferenceEngine, threatIntelClient)
         )
         
         return baseAgents + listOf(

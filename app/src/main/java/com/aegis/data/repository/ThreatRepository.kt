@@ -17,6 +17,12 @@ class ThreatRepository(private val threatDao: ThreatDao) {
 
     fun getTotalThreatCount(): Flow<Int> = threatDao.getTotalThreatCount()
 
+    fun getScamsBlockedCount(since: Long): Flow<Int> = threatDao.getScamsBlockedCount(since)
+
+    fun getLinksBlockedCount(since: Long): Flow<Int> = threatDao.getLinksBlockedCount(since)
+
+    fun getFakeNewsDetectedCount(since: Long): Flow<Int> = threatDao.getFakeNewsDetectedCount(since)
+
     suspend fun saveAnalysisResult(result: AnalysisResult) {
         result.agentResults.forEach { agentResult ->
             val event = ThreatEvent(

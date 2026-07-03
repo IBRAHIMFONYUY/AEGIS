@@ -4,29 +4,52 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
+import com.aegis.AegisApplication
+import com.aegis.network.ThreatIntelClient
 import com.aegis.ui.MainActivity
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class AegisVpnService : VpnService() {
+
+    @Inject
+    lateinit var threatIntelClient: ThreatIntelClient
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var vpnInterface: ParcelFileDescriptor? = null
     private val isRunning = AtomicBoolean(false)
 
-    private val blockedDomains = setOf(
+    private var blockedDomains = mutableSetOf(
         "phishing-site.com", "scam-link.net", "fake-login.com",
         "steal-info.org", "malware-download.ru", "spyware.cc",
         "identity-theft.net", "ransomware.biz", "fraud-alert.info"
     )
 
-    private val dnsBlocklist = setOf(
+    private var dnsBlocklist = mutableSetOf(
         "185.220.101.0", "185.220.102.0", "45.33.32.0",
         "104.16.0.0", "104.17.0.0"
     )
+
+    override fun onCreate() {
+        super.onCreate()
+        updateBlocklistsFromCloud()
+    }
+
+    private fun updateBlocklistsFromCloud() {
+        scope.launch {
+            val data = threatIntelClient.getBlocklist()
+            if (data != null) {
+                blockedDomains.addAll(data.domains)
+                dnsBlocklist.addAll(data.ips)
+            }
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startVpn()

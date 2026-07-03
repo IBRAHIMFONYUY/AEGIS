@@ -3,11 +3,13 @@ package com.aegis.agents
 import com.aegis.ai.InferenceEngine
 import com.aegis.core.*
 import com.aegis.data.repository.GuardianMemoryRepository
+import com.aegis.network.ThreatIntelClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class ScamAgent(
-    private val inferenceEngine: InferenceEngine? = null
+    private val inferenceEngine: InferenceEngine? = null,
+    private val threatIntelClient: ThreatIntelClient? = null
 ) : GuardianAgent {
 
     override val name = "ScamAgent"
@@ -50,6 +52,11 @@ class ScamAgent(
             val ruleBasedScore = ruleBasedAnalysis(text, url)
             val mlScore = inferenceEngine?.let { mlAnalysis(text) } ?: 0f
             
+            var cloudScore = 0f
+            if (url != null) {
+                cloudScore = threatIntelClient?.checkUrl(url)?.let { if (it.isMalicious) it.confidence else 0f } ?: 0f
+            }
+
             // Context Engine additions
             var contextMultiplier = 1.0f
             if (context.isUnknownSender) contextMultiplier += 0.3f
@@ -60,7 +67,8 @@ class ScamAgent(
             val behavioralMultiplier = if (ignoreCount > 3) 1.2f else 1.0f
 
             // Increased weight for AI/ML analysis for higher accuracy
-            val combinedScore = (ruleBasedScore * 0.3f + mlScore * 0.7f) * behavioralMultiplier * contextMultiplier
+            // Combining Rule (20%), ML (50%), Cloud (30%)
+            val combinedScore = (ruleBasedScore * 0.2f + mlScore * 0.5f + cloudScore * 0.3f) * behavioralMultiplier * contextMultiplier
             val threatLevel = scoreToThreatLevel(combinedScore)
             val reason = buildReason(threatLevel, combinedScore, ignoreCount > 3, context.isUnknownSender)
 
@@ -72,7 +80,7 @@ class ScamAgent(
                 details = mapOf(
                     "ruleScore" to ruleBasedScore.toString(),
                     "mlScore" to mlScore.toString(),
-                    "keywords" to matchedKeywords(text).joinToString(","),
+                    "cloudScore" to cloudScore.toString(),
                     "contextMultiplier" to contextMultiplier.toString(),
                     "behavioralMultiplier" to behavioralMultiplier.toString(),
                     "isUnknownSender" to context.isUnknownSender.toString()
