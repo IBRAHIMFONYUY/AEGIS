@@ -22,6 +22,7 @@ import com.aegis.ui.theme.*
 fun AcademyScreen(
     learningRepository: LearningRepository,
     guardianCore: GuardianCore,
+    navController: androidx.navigation.NavController? = null,
     viewModel: AcademyViewModel = hiltViewModel()
 ) {
     val modules by viewModel.modules.collectAsState()
@@ -87,6 +88,17 @@ fun AcademyScreen(
                         )
                     }
                 }
+            }
+
+            item {
+                SectionHeader("Special Practice")
+                FeatureCard(
+                    icon = { Icon(Icons.Filled.Psychology, null, tint = WarningOrange) },
+                    title = "AI Scam Simulator",
+                    description = "Test your awareness against real scenarios",
+                    onClick = { navController?.navigate("scam_simulator") },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
 
             item {

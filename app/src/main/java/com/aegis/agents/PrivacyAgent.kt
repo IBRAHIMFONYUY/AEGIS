@@ -40,6 +40,10 @@ class PrivacyAgent(
     ): AgentResult {
         val text = context.text ?: return safeResult
 
+        if (context.metadata["is_permission_dialog"] == "true") {
+            return analyzePermissionRequest(context)
+        }
+
         val foundSensitive = mutableMapOf<String, Int>()
         for ((type, pattern) in sensitivePatterns) {
             val matches = pattern.findAll(text).toList()

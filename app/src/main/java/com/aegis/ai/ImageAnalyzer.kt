@@ -20,7 +20,7 @@ class ImageAnalyzer(private val context: Context) {
             val image = InputImage.fromFilePath(context, Uri.fromFile(file))
             val result = recognizer.process(image).await()
             result.text
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -30,7 +30,7 @@ class ImageAnalyzer(private val context: Context) {
             val image = InputImage.fromFilePath(context, uri)
             val result = recognizer.process(image).await()
             result.text
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

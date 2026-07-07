@@ -9,6 +9,7 @@ data class AnalysisContext(
     val audioPath: String? = null,
     val appRiskScore: Float = 0f, // 0 to 1, where 1 is highly risky app
     val isUnknownSender: Boolean = false,
+    val conversationHistory: List<String> = emptyList(),
     val metadata: Map<String, String> = emptyMap(),
     val timestamp: Long = System.currentTimeMillis()
 )
@@ -22,6 +23,7 @@ enum class SourceType {
     WHATSAPP,
     TELEGRAM,
     MESSENGER,
+    SCREEN,
     FILE,
     IMAGE,
     AUDIO,

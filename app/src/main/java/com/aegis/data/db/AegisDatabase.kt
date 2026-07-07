@@ -28,6 +28,10 @@ abstract class AegisDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
 
     companion object {
+        init {
+            System.loadLibrary("sqlcipher")
+        }
+
         private const val DB_NAME = "aegis_secure.db"
 
         @Volatile

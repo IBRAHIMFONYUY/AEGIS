@@ -1,10 +1,13 @@
 package com.aegis.core
 
+import com.aegis.ai.GemmaInferenceEngine
+import com.aegis.agents.ScamAgent
 import com.aegis.data.repository.GuardianMemoryRepository
 
 class GuardianEngine(
     private val agents: List<GuardianAgent>,
-    private val memory: GuardianMemoryRepository? = null
+    private val memory: GuardianMemoryRepository? = null,
+    private val gemmaEngine: GemmaInferenceEngine? = null
 ) {
     private val _analysisHistory = mutableListOf<AnalysisResult>()
     val analysisHistory: List<AnalysisResult> get() = _analysisHistory.toList()
@@ -18,7 +21,12 @@ class GuardianEngine(
             .filter { it.isAvailable() }
             .map { agent ->
                 try {
-                    agent.analyze(context, memory, emptyList())
+                    // Use real inference for ScamAgent if Gemma is available
+                    if (agent is ScamAgent && gemmaEngine != null) {
+                        agent.analyzeWithRealInference(context, memory, gemmaEngine)
+                    } else {
+                        agent.analyze(context, memory, emptyList())
+                    }
                 } catch (e: Exception) {
                     AgentResult(
                         agentName = agent.name,
@@ -55,7 +63,7 @@ class GuardianEngine(
 
     private fun computeOverallThreat(results: List<AgentResult>): ThreatLevel {
         if (results.isEmpty()) return ThreatLevel.SAFE
-        val maxThreat = results.maxBy { it.threatLevel.value }.threatLevel
+        val maxThreat = results.maxByOrNull { it.threatLevel.value }?.threatLevel ?: ThreatLevel.SAFE
         val highConfidenceThreats = results.filter {
             it.confidence >= 0.7f && it.threatLevel.value >= ThreatLevel.MALICIOUS.value
         }

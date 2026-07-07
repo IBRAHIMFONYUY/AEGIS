@@ -38,6 +38,23 @@ class AegisAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                val packageName = event.packageName?.toString() ?: ""
+                // Detect permission dialogs
+                if (packageName == "com.google.android.permissioncontroller" || 
+                    packageName == "com.android.permissioncontroller") {
+                    handlePermissionDialog(event)
+                }
+                
+                val root = rootInActiveWindow
+                if (root != null) {
+                    val pageText = extractAllText(root)
+                    if (pageText.length > 10) {
+                        analyzeText(pageText, packageName)
+                    }
+                    root.recycle()
+                }
+            }
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, 
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_VIEW_FOCUSED -> {
@@ -46,7 +63,6 @@ class AegisAccessibilityService : AccessibilityService() {
                     analyzeText(text, event.packageName?.toString())
                 }
             }
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                 val root = rootInActiveWindow
                 if (root != null) {
@@ -58,6 +74,27 @@ class AegisAccessibilityService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    private fun handlePermissionDialog(event: AccessibilityEvent) {
+        val root = rootInActiveWindow ?: return
+        val dialogText = extractAllText(root)
+        val packageName = event.packageName?.toString()
+        
+        scope.launch {
+            val context = AnalysisContext(
+                text = "Permission Request Detected: $dialogText",
+                sourceApp = packageName,
+                sourceType = SourceType.SCREEN,
+                metadata = mapOf(
+                    "source" to "accessibility_service",
+                    "is_permission_dialog" to "true",
+                    "dialog_content" to dialogText
+                )
+            )
+            guardianCore.analyze(context)
+        }
+        root.recycle()
     }
 
     private fun extractText(event: AccessibilityEvent): String? {
@@ -87,7 +124,7 @@ class AegisAccessibilityService : AccessibilityService() {
             val context = AnalysisContext(
                 text = text,
                 sourceApp = sourceApp,
-                sourceType = SourceType.NOTIFICATION,
+                sourceType = SourceType.SCREEN,
                 metadata = mapOf("source" to "accessibility_service")
             )
             guardianCore.analyze(context)

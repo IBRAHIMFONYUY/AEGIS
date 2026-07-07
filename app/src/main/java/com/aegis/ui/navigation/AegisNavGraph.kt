@@ -20,8 +20,11 @@ import androidx.navigation.compose.rememberNavController
 import com.aegis.agents.GuardianCore
 import com.aegis.data.repository.*
 import com.aegis.ui.academy.AcademyScreen
+import com.aegis.ui.academy.AcademyScreen
+import com.aegis.ui.academy.ScamSimulatorScreen
 import com.aegis.ui.assistant.AssistantScreen
 import com.aegis.ui.dashboard.DashboardScreen
+import com.aegis.ui.privacy.PrivacyScreen
 import com.aegis.ui.settings.SettingsScreen
 import com.aegis.ui.threatlog.ThreatLogScreen
 import com.aegis.ui.vault.VaultScreen
@@ -32,6 +35,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Privacy : Screen("privacy", "Privacy", Icons.Filled.Lock)
     data object Vault : Screen("vault", "Vault", Icons.Filled.Https)
     data object ThreatIntel : Screen("threat_intel", "Threat Intel", Icons.Filled.Public)
+    data object Academy : Screen("academy", "Academy", Icons.Filled.School)
 }
 
 val bottomNavItems = listOf(
@@ -94,14 +98,20 @@ fun AegisNavGraph(
                 AssistantScreen(guardianCore = guardianCore)
             }
             composable(Screen.Privacy.route) {
-                // Using AcademyScreen as a placeholder for Privacy for now, or I can create a new one
-                AcademyScreen(
-                    learningRepository = learningRepository,
-                    guardianCore = guardianCore
-                )
+                PrivacyScreen()
             }
             composable(Screen.Vault.route) {
                 VaultScreen()
+            }
+            composable(Screen.Academy.route) {
+                AcademyScreen(
+                    learningRepository = learningRepository,
+                    guardianCore = guardianCore,
+                    navController = navController
+                )
+            }
+            composable("scam_simulator") {
+                ScamSimulatorScreen(onComplete = { navController.popBackStack() })
             }
             composable(Screen.ThreatIntel.route) {
                 ThreatLogScreen(

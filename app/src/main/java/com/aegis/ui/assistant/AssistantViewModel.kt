@@ -12,8 +12,20 @@ import javax.inject.Inject
 @HiltViewModel
 class AssistantViewModel @Inject constructor(
     private val guardianCore: GuardianCore,
-    private val reasoningEngine: ReasoningEngine
+    private val reasoningEngine: com.aegis.ai.ReasoningEngine
 ) : ViewModel() {
+
+    val isModelLoaded: StateFlow<Boolean> = if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+        reasoningEngine.isModelLoadedFlow
+    } else {
+        MutableStateFlow(true).asStateFlow()
+    }
+
+    val loadProgress: StateFlow<Float> = if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+        reasoningEngine.loadProgress
+    } else {
+        MutableStateFlow(1f).asStateFlow()
+    }
 
     data class ChatMessage(
         val text: String,

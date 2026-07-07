@@ -28,6 +28,9 @@ fun AssistantScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
+    val isModelLoaded by viewModel.isModelLoaded.collectAsState()
+    val loadProgress by viewModel.loadProgress.collectAsState()
+
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -111,6 +114,29 @@ fun AssistantScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             GradientTopBar()
+            
+            if (!isModelLoaded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Initializing Local Guardian Engine...",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AegisPrimaryLight
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { loadProgress },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = AegisPrimaryLight,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+            }
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier

@@ -56,7 +56,9 @@ class AegisNotificationListener : NotificationListenerService() {
                     metadata = mapOf(
                         "notification_title" to title,
                         "notification_tag" to (sbn.tag ?: ""),
-                        "notification_id" to sbn.id.toString()
+                        "notification_id" to sbn.id.toString(),
+                        "sender" to title,
+                        "chat_id" to "${packageName}_$title"
                     )
                 )
                 guardianCore.analyze(context)

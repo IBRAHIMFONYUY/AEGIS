@@ -6,6 +6,8 @@ import com.aegis.ai.*
 import com.aegis.core.GuardianAgent
 import com.aegis.data.repository.GuardianMemoryRepository
 import com.aegis.network.ThreatIntelClient
+
+import com.aegis.core.EmergencyGuardian
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,15 +21,20 @@ object AIModule {
 
     @Provides
     @Singleton
-    fun provideInferenceEngine(@ApplicationContext context: Context): CompositeInferenceEngine =
-        CompositeInferenceEngine(context)
+    fun provideGemmaInferenceEngine(@ApplicationContext context: Context): GemmaInferenceEngine =
+        GemmaInferenceEngine(context)
+
+    @Provides
+    @Singleton
+    fun provideInferenceEngine(
+        gemmaEngine: GemmaInferenceEngine
+    ): InferenceEngine = gemmaEngine
 
     @Provides
     @Singleton
     fun provideReasoningEngine(
-        @ApplicationContext context: Context,
-        modelManager: ModelManager
-    ): ReasoningEngine = OnnxReasoningEngine(context, modelManager)
+        gemmaEngine: GemmaInferenceEngine
+    ): ReasoningEngine = gemmaEngine
 
     @Provides
     @Singleton
@@ -42,7 +49,7 @@ object AIModule {
     @Provides
     @Singleton
     fun provideGuardianAgents(
-        inferenceEngine: CompositeInferenceEngine,
+        inferenceEngine: InferenceEngine,
         reasoningEngine: ReasoningEngine,
         imageAnalyzer: ImageAnalyzer,
         threatIntelClient: ThreatIntelClient
@@ -54,9 +61,13 @@ object AIModule {
             MisinformationAgent(inferenceEngine),
             IntentAgent(inferenceEngine, reasoningEngine),
             PaymentGuardianAgent(),
-            MalwareGuardianAgent(inferenceEngine, threatIntelClient)
+            MalwareGuardianAgent(inferenceEngine, threatIntelClient),
+            DeepfakeAgent(inferenceEngine),
+            BehavioralAgent(inferenceEngine),
+            DecisionAgent(reasoningEngine),
+            PhishingAgent(inferenceEngine, threatIntelClient)
         )
-        
+
         return baseAgents + listOf(
             ImageGuardianAgent(imageAnalyzer, baseAgents),
             GuardianCoachAgent(reasoningEngine)
@@ -67,6 +78,14 @@ object AIModule {
     @Singleton
     fun provideGuardianCore(
         agents: @JvmSuppressWildcards List<GuardianAgent>,
-        memoryRepository: GuardianMemoryRepository
-    ): GuardianCore = GuardianCore(agents, memoryRepository)
+        memoryRepository: GuardianMemoryRepository,
+        gemmaEngine: GemmaInferenceEngine
+    ): GuardianCore = GuardianCore(agents, memoryRepository, gemmaEngine)
+
+    @Provides
+    @Singleton
+    fun provideEmergencyGuardian(@ApplicationContext context: Context): EmergencyGuardian =
+        EmergencyGuardian(context)
+
+
 }

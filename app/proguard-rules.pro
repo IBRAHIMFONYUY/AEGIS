@@ -33,3 +33,8 @@
 -keepclassmembers,allowobfuscation class * {
     @com.google.gson.annotations.Expose <fields>;
 }
+
+# SQLCipher
+-keep class net.zetetic.database.sqlcipher.** { *; }
+-keep class net.zetetic.database.** { *; }
+-dontwarn net.zetetic.database.sqlcipher.**

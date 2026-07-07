@@ -3,23 +3,29 @@ package com.aegis.services.overlay
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GppBad
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.*
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
@@ -27,7 +33,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.aegis.core.AnalysisResult
 import com.aegis.core.ThreatLevel
-import com.aegis.ui.theme.AegisTheme
+import com.aegis.ui.theme.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -41,13 +47,18 @@ class ThreatOverlayManager(private val context: Context) {
     fun showThreatAlert(result: AnalysisResult) {
         if (result.overallThreatLevel == ThreatLevel.SAFE) return
 
-        // Remove existing view if any
+        // Check for overlay permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(context)) {
+            Log.w("ThreatOverlayManager", "Cannot show overlay: SYSTEM_ALERT_WINDOW permission not granted")
+            return
+        }
+
         CoroutineScope(Dispatchers.Main).launch {
             hideOverlay()
 
             val composeView = ComposeView(context).apply {
                 setContent {
-                    AegisTheme {
+                    AegisTheme(darkTheme = true) {
                         ThreatAlertUI(
                             result = result,
                             onDismiss = { hideOverlay() }
@@ -56,7 +67,6 @@ class ThreatOverlayManager(private val context: Context) {
                 }
             }
 
-            // Setup owners for ComposeView
             val lifecycleOwner = MyLifecycleOwner()
             lifecycleOwner.performRestore(null)
             lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -70,23 +80,24 @@ class ThreatOverlayManager(private val context: Context) {
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
+                else WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP
-                y = 100 // Margin from top
+                y = 50 
             }
 
             try {
                 windowManager.addView(composeView, params)
                 currentView = composeView
                 
-                // Auto-hide after 10 seconds if it's just suspicious
-                if (result.overallThreatLevel == ThreatLevel.SUSPICIOUS) {
-                    delay(10000)
-                    hideOverlay()
-                }
+                // Critical threats stay longer, suspicious ones fade after 8s
+                val duration = if (result.overallThreatLevel.value >= ThreatLevel.MALICIOUS.value) 20000L else 8000L
+                delay(duration)
+                hideOverlay()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -130,86 +141,86 @@ fun ThreatAlertUI(
 ) {
     val level = result.overallThreatLevel
     val color = when (level) {
-        ThreatLevel.CRITICAL -> Color(0xFFD32F2F)
-        ThreatLevel.MALICIOUS -> Color(0xFFF44336)
-        ThreatLevel.LIKELY_MALICIOUS -> Color(0xFFFF9800)
-        else -> Color(0xFFFFC107)
+        ThreatLevel.CRITICAL -> DangerRed
+        ThreatLevel.MALICIOUS -> DangerRed
+        ThreatLevel.LIKELY_MALICIOUS -> WarningOrange
+        else -> WarningYellow
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            .padding(12.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C1E)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = when(level) {
-                        ThreatLevel.CRITICAL -> Icons.Default.GppBad
-                        else -> Icons.Default.Warning
-                    },
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(32.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(color.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (level.value >= ThreatLevel.MALICIOUS.value) Icons.Filled.GppBad else Icons.Filled.Security,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "AEGIS Guard: ${level.label}",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = "AEGIS GUARDIAN: ${level.label.uppercase()}",
+                        style = MaterialTheme.typography.labelSmall,
                         color = color,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Source: ${result.context.sourceApp ?: "Unknown App"}",
-                        style = MaterialTheme.typography.labelSmall
+                        text = "Suspicious activity in ${result.context.sourceApp?.split('.')?.lastOrNull() ?: "Current App"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
                     )
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, null)
+                    Icon(Icons.Filled.Close, null, tint = Color.White.copy(alpha = 0.4f))
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = result.agentResults.firstOrNull { it.threatLevel.value >= level.value }?.reason 
-                    ?: "Suspicious activity detected.",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
+            val coachExplanation = result.agentResults.find { it.agentName == "GuardianCoach" }?.reason
+            val primaryReason = result.agentResults.maxByOrNull { it.threatLevel.value }?.reason 
+                ?: "Potential manipulation detected."
 
-            if (result.context.text?.isNotEmpty() == true) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = result.context.text!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(8.dp),
-                        maxLines = 3
-                    )
-                }
-            }
+            Text(
+                text = coachExplanation ?: primaryReason,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Medium,
+                lineHeight = 20.sp
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) {
-                    Text("Ignore")
+                    Text("Ignore", color = Color.White.copy(alpha = 0.6f))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = color)
+                    colors = ButtonDefaults.buttonColors(containerColor = color),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Secure Now")
+                    Text(
+                        if (level.value >= ThreatLevel.MALICIOUS.value) "Secure My Data" else "Understood",
+                        fontWeight = FontWeight.Bold,
+                        color = if (color == WarningYellow) Color.Black else Color.White
+                    )
                 }
             }
         }

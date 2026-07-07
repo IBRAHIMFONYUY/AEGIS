@@ -56,6 +56,7 @@ class CryptoManager {
             )
                 .setDigests(KeyProperties.DIGEST_SHA256)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
                 .setKeySize(2048)
                 .build()
             keyPairGenerator.initialize(spec)
@@ -118,20 +119,31 @@ class CryptoManager {
 
     fun generateDatabasePassphrase(): ByteArray {
         return try {
-            // We need a stable 32-byte key for SQLCipher.
-            // Since we can't export raw AES keys from Android KeyStore,
-            // we'll sign a constant string using our persistent RSA key
-            // and use the SHA-256 hash of that signature as the stable passphrase.
-            val signature = Signature.getInstance("SHA256withRSA")
-            val privateKey = keyStore.getKey(RSA_KEY_ALIAS, null) as PrivateKey
-            signature.initSign(privateKey)
-            signature.update("aegis_db_seed_2024".toByteArray())
-            val signatureBytes = signature.sign()
-            
-            MessageDigest.getInstance("SHA-256").digest(signatureBytes)
+            tryGeneratePassphrase()
         } catch (e: Exception) {
+            // Self-healing: if the key is misconfigured (e.g. missing signature padding from a previous version),
+            // delete it and try to regenerate once.
+            if (e is InvalidKeyException || e.cause is InvalidKeyException || e.message?.contains("padding") == true) {
+                keyStore.deleteEntry(RSA_KEY_ALIAS)
+                generateRSAKeyPair()
+                try {
+                    return tryGeneratePassphrase()
+                } catch (retryException: Exception) {
+                    throw SecurityException("Failed to generate database passphrase after key regeneration", retryException)
+                }
+            }
             throw SecurityException("Failed to generate database passphrase from keystore", e)
         }
+    }
+
+    private fun tryGeneratePassphrase(): ByteArray {
+        val signature = Signature.getInstance("SHA256withRSA")
+        val privateKey = keyStore.getKey(RSA_KEY_ALIAS, null) as PrivateKey
+        signature.initSign(privateKey)
+        signature.update("aegis_db_seed_2024".toByteArray())
+        val signatureBytes = signature.sign()
+        
+        return MessageDigest.getInstance("SHA-256").digest(signatureBytes)
     }
 
     fun getSignature(data: ByteArray): ByteArray? {

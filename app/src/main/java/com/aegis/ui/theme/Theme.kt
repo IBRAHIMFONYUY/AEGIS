@@ -11,16 +11,17 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = AegisPrimaryLight,
+    primary = AegisPrimary,
     onPrimary = Color.White,
     primaryContainer = AegisPrimaryDark,
-    secondary = AegisSecondaryLight,
+    secondary = AegisSecondary,
     onSecondary = Color.White,
     background = BackgroundDark,
     surface = SurfaceDark,
     surfaceVariant = SurfaceDarkHigh,
     onBackground = OnSurfaceDark,
     onSurface = OnSurfaceDark,
+    onSurfaceVariant = OnSurfaceDim,
     error = DangerRed,
     onError = Color.White
 )

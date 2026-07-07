@@ -62,6 +62,9 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -97,20 +100,34 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.27.0")
 
-    implementation("com.google.ai.edge.litert:litert:1.0.1")
-    implementation("com.google.ai.edge.litert:litert-support:1.0.1")
+    implementation("com.google.ai.edge.litert:litert:1.1.0")
+    implementation("com.google.ai.edge.litert:litert-support:1.1.0")
 
     implementation("com.google.mediapipe:tasks-genai:0.10.35")
 
-    implementation("com.google.mlkit:text-recognition:16.0.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
-    implementation("androidx.security:security-crypto:1.0.0")
+    implementation("androidx.camera:camera-core:1.4.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
+
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
+    implementation("com.google.accompanist:accompanist-permissions:0.37.3")
+
+    implementation("com.jakewharton.timber:timber:5.0.1")
+
+    implementation("androidx.security:security-crypto:1.1.0")
 
     implementation("com.google.android.play:integrity:1.3.0")
 
+    implementation("androidx.datastore:datastore:1.2.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Hilt
@@ -119,8 +136,13 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+
+    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
 
     implementation("com.google.code.gson:gson:2.11.0")
+
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

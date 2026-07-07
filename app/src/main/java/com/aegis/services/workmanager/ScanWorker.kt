@@ -22,6 +22,20 @@ class ScanWorker(
     }
 
     private suspend fun performBackgroundScan() {
+        val packageManager = applicationContext.packageManager
+        val installedApps = packageManager.getInstalledApplications(android.content.pm.PackageManager.GET_META_DATA)
+        
+        val guardianCore = (applicationContext as? com.aegis.AegisApplication)?.guardianCore ?: return
+
+        installedApps.forEach { appInfo ->
+            val context = com.aegis.core.AnalysisContext(
+                text = "Scanning app: ${appInfo.loadLabel(packageManager)}",
+                sourceApp = appInfo.packageName,
+                sourceType = com.aegis.core.SourceType.FILE,
+                appRiskScore = if (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM == 0) 0.5f else 0.1f
+            )
+            guardianCore.analyze(context)
+        }
     }
 
     companion object {

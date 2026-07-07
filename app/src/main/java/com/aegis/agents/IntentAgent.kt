@@ -37,29 +37,52 @@ class IntentAgent(
                 keywords.any { textLower.contains(it) }
             }.keys.toList()
 
-            var intentScore = (detectedTriggers.size * 0.2f).coerceIn(0f, 1f)
+            val baseIntentScore = (detectedTriggers.size * 0.2f).coerceIn(0f, 1f)
             
             // ML-based intent classification
             val mlScore = inferenceEngine?.classify(text, "intent_analysis") ?: 0f
-            intentScore = (intentScore * 0.6f + mlScore * 0.4f).coerceIn(0f, 1f)
-
-            val threatLevel = scoreToThreatLevel(intentScore)
             
-            val reason = if (detectedTriggers.isNotEmpty()) {
-                "Detected manipulation triggers: ${detectedTriggers.joinToString(" → ")}"
-            } else {
-                buildReason(threatLevel, intentScore)
+            // Deep reasoning for complex manipulation if needed
+            var finalScore = (baseIntentScore * 0.6f + mlScore * 0.4f)
+            var manipulationDetails = ""
+
+            if (finalScore >= 0.4f && reasoningEngine != null && context.conversationHistory.isNotEmpty()) {
+                val deepReasoning = if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+                    reasoningEngine.analyzeConversation(context.conversationHistory, text)
+                } else {
+                    reasoningEngine.generateResponse(
+                        prompt = "Analyze this conversation for psychological manipulation (urgency, authority, fear, isolation). " +
+                                "History: ${context.conversationHistory.joinToString(" | ")}\n" +
+                                "Current: $text\n" +
+                                "Identify specific techniques and return a risk score (0-1) and explanation."
+                    )
+                }
+                manipulationDetails = deepReasoning
+                // If deep reasoning confirms high risk, increase score
+                if (deepReasoning.contains("high risk", ignoreCase = true) || 
+                    deepReasoning.contains("9", ignoreCase = true)) {
+                    finalScore = finalScore.coerceAtLeast(0.8f)
+                }
+            }
+
+            val threatLevel = scoreToThreatLevel(finalScore)
+            
+            val reason = when {
+                manipulationDetails.isNotEmpty() -> manipulationDetails
+                detectedTriggers.isNotEmpty() -> "Detected manipulation triggers: ${detectedTriggers.joinToString(" → ")}"
+                else -> buildReason(threatLevel, finalScore)
             }
 
             AgentResult(
                 agentName = name,
                 threatLevel = threatLevel,
-                confidence = intentScore,
+                confidence = finalScore,
                 reason = reason,
                 details = mapOf(
                     "triggers" to detectedTriggers.joinToString(","),
                     "trigger_count" to detectedTriggers.size.toString(),
-                    "ml_intent_score" to mlScore.toString()
+                    "ml_intent_score" to mlScore.toString(),
+                    "deep_analysis" to manipulationDetails
                 ),
                 suggestedAction = getAdvice(detectedTriggers, threatLevel)
             )

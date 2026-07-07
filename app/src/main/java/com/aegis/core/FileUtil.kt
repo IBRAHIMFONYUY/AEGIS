@@ -17,7 +17,7 @@ object FileUtil {
                 }
             }
             tempFile.absolutePath
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

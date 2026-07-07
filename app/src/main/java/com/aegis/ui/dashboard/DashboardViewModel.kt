@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aegis.agents.GuardianCore
+import com.aegis.core.AnalysisResult
 import com.aegis.data.repository.SafetyRepository
 import com.aegis.data.repository.SettingsRepository
 import com.aegis.data.repository.ThreatRepository
@@ -35,6 +36,10 @@ class DashboardViewModel @Inject constructor(
 
     val recentThreats: StateFlow<List<com.aegis.data.db.entity.ThreatEvent>> = threatRepository.getRecentThreats(3)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val isAnalyzing: StateFlow<Boolean> = guardianCore.isAnalyzing
+    
+    val lastResult: StateFlow<AnalysisResult?> = guardianCore.lastAnalysis
 
     val protectionStats: StateFlow<ProtectionSummary> = combine(
         threatRepository.getScamsBlockedCount(getStartOfDay()),
@@ -78,6 +83,18 @@ class DashboardViewModel @Inject constructor(
 
     fun refreshData() {
         _agentStatuses.value = guardianCore.getAgentStatuses()
+    }
+
+    fun runFullScan() {
+        viewModelScope.launch {
+            val context = com.aegis.core.AnalysisContext(
+                text = "System wide scan initiated by user",
+                sourceType = com.aegis.core.SourceType.UNKNOWN,
+                metadata = mapOf("deep_scan" to "true")
+            )
+            guardianCore.analyze(context)
+            _agentStatuses.value = guardianCore.getAgentStatuses()
+        }
     }
 }
 

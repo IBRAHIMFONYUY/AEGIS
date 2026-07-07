@@ -94,6 +94,14 @@ class AegisForegroundService : Service() {
     }
 
     private suspend fun performBackgroundScan() {
+        // Continuous scan could check clipboard or other light signals
+        // For now, just a heartbeat analysis to ensure engine is alive
+        val context = com.aegis.core.AnalysisContext(
+            text = "Active background protection heartbeat",
+            sourceType = com.aegis.core.SourceType.UNKNOWN,
+            metadata = mapOf("heartbeat" to "true")
+        )
+        guardianCore.analyze(context)
     }
 
     override fun onDestroy() {

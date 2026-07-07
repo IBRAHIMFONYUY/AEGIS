@@ -37,18 +37,30 @@ class GuardianCoachAgent(
             .filter { it.threatLevel.value >= ThreatLevel.SUSPICIOUS.value }
             .joinToString("\n") { "- ${it.agentName}: ${it.reason}" }
 
+        val chatHistory = if (context.conversationHistory.isNotEmpty()) {
+            "\nRecent Chat History:\n" + context.conversationHistory.joinToString("\n")
+        } else ""
+
+        val contactSummary = context.metadata["contact_summary"]?.let {
+            "\nHistorical Summary of this Contact:\n$it"
+        } ?: ""
+
         return """
             Analyze the following mobile interaction for security risks:
             Text: ${context.text ?: "N/A"}
             Source App: ${context.sourceApp ?: "Unknown"}
             Source Type: ${context.sourceType}
             Is Unknown Sender: ${context.isUnknownSender}
+            $chatHistory
+            $contactSummary
             
             Detected Threats:
             $threatReport
             
-            Provide a concise, human-friendly, educational explanation of potential risks and clear, actionable advice.
-            Explain WHY this is risky based on the detected threats.
+            Provide a concise, human-friendly, educational explanation.
+            If there is chat history, use it to explain WHY the current message is suspicious compared to previous ones.
+            Example: "Based on your previous chat with this person, this new message is unusually urgent."
+            Provide clear, actionable advice.
         """.trimIndent()
     }
 

@@ -72,6 +72,10 @@ class ScamAgent(
             val threatLevel = scoreToThreatLevel(combinedScore)
             val reason = buildReason(threatLevel, combinedScore, ignoreCount > 3, context.isUnknownSender)
 
+            val dialogueShiftAdvice = getDialogueShiftAdvice(context)
+            val baseSuggestedAction = suggestedAction(threatLevel, ignoreCount > 3)
+            val finalAction = if (dialogueShiftAdvice != null) "$baseSuggestedAction\n\n$dialogueShiftAdvice" else baseSuggestedAction
+
             AgentResult(
                 agentName = name,
                 threatLevel = threatLevel,
@@ -83,9 +87,10 @@ class ScamAgent(
                     "cloudScore" to cloudScore.toString(),
                     "contextMultiplier" to contextMultiplier.toString(),
                     "behavioralMultiplier" to behavioralMultiplier.toString(),
-                    "isUnknownSender" to context.isUnknownSender.toString()
+                    "isUnknownSender" to context.isUnknownSender.toString(),
+                    "chat_history_size" to context.conversationHistory.size.toString()
                 ),
-                suggestedAction = suggestedAction(threatLevel, ignoreCount > 3),
+                suggestedAction = finalAction,
                 requiresUserAttention = threatLevel.value >= ThreatLevel.MALICIOUS.value
             )
         }
@@ -116,6 +121,64 @@ class ScamAgent(
     private suspend fun mlAnalysis(text: String): Float {
         return inferenceEngine?.classify(text, "scam_detection") ?: 0f
     }
+    
+    suspend fun analyzeWithRealInference(
+        context: AnalysisContext,
+        memory: GuardianMemoryRepository?,
+        gemmaEngine: com.aegis.ai.GemmaInferenceEngine?
+    ): AgentResult =
+        withContext(Dispatchers.Default) {
+            val text = context.text ?: return@withContext safeResult
+            val url = context.url
+
+            val ruleBasedScore = ruleBasedAnalysis(text, url)
+            
+            // Use Gemma specialized task method for real ML analysis
+            val mlScore = gemmaEngine?.detectScam(text, context.metadata) ?: 0f
+            
+            var cloudScore = 0f
+            if (url != null) {
+                cloudScore = threatIntelClient?.checkUrl(url)?.let { if (it.isMalicious) it.confidence else 0f } ?: 0f
+            }
+
+            // Context Engine additions
+            var contextMultiplier = 1.0f
+            if (context.isUnknownSender) contextMultiplier += 0.3f
+            if (context.appRiskScore > 0.5f) contextMultiplier += 0.2f
+            if (context.sourceType == SourceType.SMS) contextMultiplier += 0.1f
+
+            val ignoreCount = memory?.getLatest("GLOBAL_IGNORE_COUNT")?.toIntOrNull() ?: 0
+            val behavioralMultiplier = if (ignoreCount > 3) 1.2f else 1.0f
+
+            // Increased weight for AI/ML analysis for higher accuracy
+            // Combining Rule (20%), ML (50%), Cloud (30%)
+            val combinedScore = (ruleBasedScore * 0.2f + mlScore * 0.5f + cloudScore * 0.3f) * behavioralMultiplier * contextMultiplier
+            val threatLevel = scoreToThreatLevel(combinedScore)
+            val reason = buildReason(threatLevel, combinedScore, ignoreCount > 3, context.isUnknownSender)
+
+            val dialogueShiftAdvice = getDialogueShiftAdvice(context)
+            val baseSuggestedAction = suggestedAction(threatLevel, ignoreCount > 3)
+            val finalAction = if (dialogueShiftAdvice != null) "$baseSuggestedAction\n\n$dialogueShiftAdvice" else baseSuggestedAction
+
+            AgentResult(
+                agentName = name,
+                threatLevel = threatLevel,
+                confidence = combinedScore.coerceIn(0f, 1f),
+                reason = reason,
+                details = mapOf(
+                    "ruleScore" to ruleBasedScore.toString(),
+                    "mlScore" to mlScore.toString(),
+                    "cloudScore" to cloudScore.toString(),
+                    "contextMultiplier" to contextMultiplier.toString(),
+                    "behavioralMultiplier" to behavioralMultiplier.toString(),
+                    "isUnknownSender" to context.isUnknownSender.toString(),
+                    "chat_history_size" to context.conversationHistory.size.toString(),
+                    "inferenceEngine" to (gemmaEngine?.let { "Gemma 3N" } ?: "None")
+                ),
+                suggestedAction = finalAction,
+                requiresUserAttention = threatLevel.value >= ThreatLevel.MALICIOUS.value
+            )
+        }
 
     private fun matchedKeywords(text: String): List<String> {
         val textLower = text.lowercase()
@@ -163,6 +226,23 @@ class ScamAgent(
         } else {
             baseAction
         }
+    }
+
+    private fun getDialogueShiftAdvice(context: AnalysisContext): String? {
+        if (context.conversationHistory.size < 3) return null
+        
+        // Analyze for sudden shifts (e.g., normal chat -> urgent financial request)
+        val historyText = context.conversationHistory.joinToString(" ").lowercase()
+        val currentText = context.text?.lowercase() ?: ""
+        
+        val historyHadMoney = historyText.contains("money") || historyText.contains("pay") || historyText.contains("momo")
+        val currentHasMoney = currentText.contains("money") || currentText.contains("pay") || currentText.contains("momo")
+        
+        if (!historyHadMoney && currentHasMoney && currentText.contains("urgent")) {
+            return "Note: This contact has suddenly shifted to an urgent financial request, which is a high-risk behavior pattern."
+        }
+        
+        return null
     }
 
     private val safeResult get() = AgentResult(

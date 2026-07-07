@@ -30,4 +30,10 @@ object SecurityModule {
             initializeMasterKey()
         }
     }
+
+    @Provides
+    @Singleton
+    fun provideBiometricHelper(@ApplicationContext context: Context): com.aegis.security.BiometricHelper {
+        return com.aegis.security.BiometricHelper(context)
+    }
 }
