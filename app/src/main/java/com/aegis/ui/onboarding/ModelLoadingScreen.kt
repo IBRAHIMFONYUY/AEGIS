@@ -12,7 +12,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,10 +28,11 @@ fun ModelLoadingScreen(
     onLoadComplete: () -> Unit,
     onSkip: () -> Unit
 ) {
-    val isLoaded by gemmaEngine.isModelLoaded.collectAsState()
+    val isLoaded by gemmaEngine.isModelLoadedFlow.collectAsState()
     val isLoading by gemmaEngine.isLoading.collectAsState()
-    val progress by gemmaEngine.getLoadProgress().collectAsState()
-    val error by gemmaEngine.getLoadError().collectAsState()
+    val progress by gemmaEngine.loadProgress.collectAsState()
+    val error by gemmaEngine.errorMessage.collectAsState()
+    val scope = rememberCoroutineScope()
     
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -157,12 +160,12 @@ fun ModelLoadingScreen(
                                 color = DangerRed
                             )
                             Text(
-                                error,
+                                error ?: "Unknown error",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                             Button(
-                                onClick = { gemmaEngine.loadModel() },
+                                onClick = { scope.launch { gemmaEngine.loadModel() } },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = CyberBlue
                                 ),

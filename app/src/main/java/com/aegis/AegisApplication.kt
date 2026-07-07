@@ -79,7 +79,13 @@ class AegisApplication : Application() {
 
                     threatRepository.saveAnalysisResult(result)
 
-                    if (result.overallThreatLevel.value >= ThreatLevel.SUSPICIOUS.value) {
+                    val isHighRisk = result.overallThreatLevel.value >= ThreatLevel.MALICIOUS.value
+                    val isNotification = result.context.sourceType == com.aegis.core.SourceType.NOTIFICATION ||
+                            result.context.sourceType == com.aegis.core.SourceType.WHATSAPP ||
+                            result.context.sourceType == com.aegis.core.SourceType.TELEGRAM ||
+                            result.context.sourceType == com.aegis.core.SourceType.SMS
+
+                    if (isHighRisk && isNotification) {
                         withContext(Dispatchers.Main.immediate) {
                             overlayManager.showThreatAlert(result)
                         }

@@ -86,9 +86,9 @@ dependencies {
 
     implementation("androidx.navigation:navigation-compose:2.8.5")
 
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.room:room-runtime:2.7.0-alpha11")
+    implementation("androidx.room:room-ktx:2.7.0-alpha11")
+    ksp("androidx.room:room-compiler:2.7.0-alpha11")
 
     implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
@@ -104,6 +104,7 @@ dependencies {
 
     implementation("com.google.ai.edge.litert:litert:1.1.0")
     implementation("com.google.ai.edge.litert:litert-support:1.1.0")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.12.0")
 
     implementation("com.google.mediapipe:tasks-genai:0.10.35")
 

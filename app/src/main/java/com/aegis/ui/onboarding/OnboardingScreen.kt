@@ -1,5 +1,6 @@
 package com.aegis.ui.onboarding
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,7 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,6 +67,7 @@ fun OnboardingScreen(
     
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val currentPage by remember { derivedStateOf { pagerState.currentPage } }
+    val scope = rememberCoroutineScope()
     
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -186,7 +190,9 @@ fun OnboardingScreen(
                     OutlinedButton(
                         onClick = {
                             if (currentPage > 0) {
-                                pagerState.animateScrollToPage(currentPage - 1)
+                                scope.launch {
+                                    pagerState.animateScrollToPage(currentPage - 1)
+                                }
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -202,7 +208,9 @@ fun OnboardingScreen(
                 Button(
                     onClick = {
                         if (currentPage < pages.size - 1) {
-                            pagerState.animateScrollToPage(currentPage + 1)
+                            scope.launch {
+                                pagerState.animateScrollToPage(currentPage + 1)
+                            }
                         } else {
                             onComplete()
                         }

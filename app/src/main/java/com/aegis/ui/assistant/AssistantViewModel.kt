@@ -27,6 +27,49 @@ class AssistantViewModel @Inject constructor(
         MutableStateFlow(1f).asStateFlow()
     }
 
+    val isLoading: StateFlow<Boolean> = if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+        reasoningEngine.isLoading
+    } else {
+        MutableStateFlow(false).asStateFlow()
+    }
+
+    private val _downloadProgress = MutableStateFlow<Int?>(null)
+    val downloadProgress = _downloadProgress.asStateFlow()
+
+    private val _installError = MutableStateFlow<String?>(null)
+    val installError = _installError.asStateFlow()
+
+    fun triggerInstall() {
+        if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+            viewModelScope.launch {
+                reasoningEngine.installModel().collect { status ->
+                    when (status) {
+                        is com.aegis.ai.DownloadStatus.Progress -> {
+                            _downloadProgress.value = status.percentage
+                        }
+                        is com.aegis.ai.DownloadStatus.Success -> {
+                            _downloadProgress.value = 100
+                            _installError.value = null
+                            reasoningEngine.loadModel()
+                        }
+                        is com.aegis.ai.DownloadStatus.Error -> {
+                            _installError.value = status.message
+                            _downloadProgress.value = null
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun triggerLoad() {
+        if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+            viewModelScope.launch {
+                reasoningEngine.loadModel()
+            }
+        }
+    }
+
     data class ChatMessage(
         val text: String,
         val isUser: Boolean,

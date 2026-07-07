@@ -5,14 +5,18 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.scale
 
 @Composable
 fun AnimatedCard(
@@ -96,7 +100,7 @@ fun ShimmerLoadingCard(
     contentColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val alpha by infiniteTransition.animateFloat(
+    val alpha: Float by infiniteTransition.animateFloat(
         initialValue = 0.2f,
         targetValue = 0.8f,
         animationSpec = infiniteRepeatable(
@@ -131,7 +135,7 @@ fun PulseCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val scale by infiniteTransition.animateFloat(
+    val scale: Float by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = 1.02f,
         animationSpec = infiniteRepeatable(
@@ -141,9 +145,10 @@ fun PulseCard(
         label = "pulse"
     )
     
-    val elevationValue by infiniteTransition.animateDp(
+    val elevationValue by infiniteTransition.animateValue(
         initialValue = 4.dp,
         targetValue = 8.dp,
+        typeConverter = Dp.VectorConverter,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -153,7 +158,7 @@ fun PulseCard(
     
     Card(
         modifier = modifier.then(
-            if (isPulsing) Modifier else Modifier
+            if (isPulsing) Modifier.scale(scale) else Modifier
         ),
         shape = shape,
         elevation = if (isPulsing) {
@@ -186,13 +191,13 @@ fun StaggeredGrid(
                         initialOffsetY = { it },
                         animationSpec = tween(
                             durationMillis = 400,
-                            delayMillis = delay,
+                            delayMillis = delay.toInt(),
                             easing = FastOutSlowInEasing
                         )
                     ) + fadeIn(
                         animationSpec = tween(
                             durationMillis = 400,
-                            delayMillis = delay
+                            delayMillis = delay.toInt()
                         )
                     )
                 ) {
@@ -227,13 +232,13 @@ fun BounceButton(
     content: @Composable RowScope.() -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "bounce")
-    val scale by infiniteTransition.animateFloat(
+    val scale: Float by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
                 durationMillis = 2000
-                0f at 0 with LinearEasing
+                1f at 0 with LinearEasing
                 1.05f at 100 with LinearEasing
                 1f at 200 with LinearEasing
             },
@@ -244,7 +249,10 @@ fun BounceButton(
     
     Button(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        },
         enabled = enabled
     ) {
         content()
@@ -258,7 +266,7 @@ fun RotatingIcon(
     content: @Composable () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "rotation")
-    val rotation by infiniteTransition.animateFloat(
+    val rotation: Float by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
@@ -269,12 +277,8 @@ fun RotatingIcon(
     )
     
     Box(
-        modifier = modifier
+        modifier = modifier.rotate(if (isRotating) rotation else 0f)
     ) {
-        androidx.compose.ui.draw.rotate(
-            rotation = if (isRotating) rotation else 0f
-        ) {
-            content()
-        }
+        content()
     }
 }

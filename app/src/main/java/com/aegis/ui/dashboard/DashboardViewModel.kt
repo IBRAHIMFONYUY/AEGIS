@@ -60,6 +60,12 @@ class DashboardViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            guardianCore.analysisResults.collect {
+                refreshData()
+            }
+        }
+
+        viewModelScope.launch {
             while (true) {
                 ensureActive()
                 _agentStatuses.value = guardianCore.getAgentStatuses()

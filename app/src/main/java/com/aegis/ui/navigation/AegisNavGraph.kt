@@ -36,6 +36,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Vault : Screen("vault", "Vault", Icons.Filled.Https)
     data object ThreatIntel : Screen("threat_intel", "Threat Intel", Icons.Filled.Public)
     data object Academy : Screen("academy", "Academy", Icons.Filled.School)
+    data object Settings : Screen("settings", "Settings", Icons.Filled.Settings)
 }
 
 val bottomNavItems = listOf(
@@ -101,7 +102,13 @@ fun AegisNavGraph(
                 PrivacyScreen()
             }
             composable(Screen.Vault.route) {
-                VaultScreen()
+                VaultScreen(onNavigateBack = { navController.popBackStack() })
+            }
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    settingsRepository = settingsRepository,
+                    guardianCore = guardianCore
+                )
             }
             composable(Screen.Academy.route) {
                 AcademyScreen(

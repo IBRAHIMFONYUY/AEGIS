@@ -15,9 +15,9 @@ enum class ScoreTrend {
     DECLINING
 }
 
-enum class ScoreCategory {
-    PRIVACY,
-    SCAM_PROTECTION,
-    DEVICE_SECURITY,
-    DIGITAL_WELLBEING
+enum class ScoreCategory(val displayName: String, val icon: String) {
+    PRIVACY("Privacy", "🛡️"),
+    SCAM_PROTECTION("Scam Protection", "🚫"),
+    DEVICE_SECURITY("Device Security", "📱"),
+    DIGITAL_WELLBEING("Digital Wellbeing", "🧘")
 }

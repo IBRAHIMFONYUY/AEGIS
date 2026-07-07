@@ -1,20 +1,27 @@
 package com.aegis.ai
 
 import android.content.Context
-import com.aegis.ai.cache.FlatKVCache
-import com.aegis.ai.runtime.LLMRuntime
-import com.aegis.ai.runtime.LLMRuntimeFactory
-import com.aegis.ai.safety.SafetyClassifier
-import com.aegis.ai.sampling.Sampler
-import com.aegis.ai.sampling.SamplingParams
-import com.aegis.ai.tokenizer.BPETokenizer
-
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
+import java.io.FileOutputStream
+import java.util.concurrent.TimeUnit
+
+sealed interface DownloadStatus {
+    data class Progress(val percentage: Int) : DownloadStatus
+    data class Success(val file: File) : DownloadStatus
+    data class Error(val message: String) : DownloadStatus
+}
 
 class GemmaModelManager(private val context: Context) {
 
@@ -30,201 +37,169 @@ class GemmaModelManager(private val context: Context) {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private var llmRuntime: LLMRuntime? = null
-    private var interpreter: LiteRTInterpreter? = null
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.MINUTES)
+        .writeTimeout(10, TimeUnit.MINUTES)
+        .build()
 
     companion object {
-        private const val MODEL_FILE_NAME = "gemma-3n-q8.tflite"
-        private const val MODEL_VERSION = "1.0.0"
-        private const val MODEL_SIZE_BYTES = 1_500_000_000L // ~1.5GB
+        private const val TAG = "GemmaModelManager"
+        private const val MODEL_FILE_NAME = "gemma-3n-E2B-it-int4.litertlm"
+        private const val EXPECTED_SIZE_BYTES = 3_500_000_000L // ~1.5GB
+        private const val BASE_URL = "https://huggingface.co"
+        private const val HF_TOKEN = "" // Set this if authentication is required
     }
 
-    suspend fun loadModel(): Boolean {
-        if (_isModelLoaded.value) return true
+    fun getModelFile(): File = File(context.filesDir, MODEL_FILE_NAME)
 
-        _isLoading.value = true
-        _errorMessage.value = null
+    fun isModelInstalled(): Boolean {
+        val file = getModelFile()
+        return file.exists() && file.length() == EXPECTED_SIZE_BYTES
+    }
+
+    /**
+     * Downloads Gemma 3n to the app's internal storage and emits download updates.
+     */
+    fun installModel(modelUrl: String = "$BASE_URL/$MODEL_FILE_NAME"): Flow<DownloadStatus> = flow {
+        val targetFile = getModelFile()
+        
+        if (isModelInstalled()) {
+            emit(DownloadStatus.Success(targetFile))
+            return@flow
+        }
+
+        val existingLength = if (targetFile.exists()) targetFile.length() else 0L
+        
+        // Storage check
+        val requiredSpace = EXPECTED_SIZE_BYTES - existingLength + (500 * 1024 * 1024)
+        val availableSpace = context.filesDir.freeSpace
+        if (availableSpace < requiredSpace) {
+            emit(DownloadStatus.Error("Insufficient storage space. Need ${requiredSpace / (1024 * 1024)}MB"))
+            return@flow
+        }
 
         try {
-            _loadProgress.value = 0.1f
-
-            // Check if model exists, if not download it
-            val modelFile = File(context.filesDir, MODEL_FILE_NAME)
-            if (!modelFile.exists()) {
-                downloadModel(modelFile)
+            val requestBuilder = Request.Builder().url(modelUrl)
+            if (HF_TOKEN.isNotEmpty()) {
+                requestBuilder.addHeader("Authorization", "Bearer $HF_TOKEN")
+            }
+            
+            if (existingLength > 0) {
+                requestBuilder.addHeader("Range", "bytes=$existingLength-")
             }
 
-            _loadProgress.value = 0.5f
+            httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                if (response.code == 401 || response.code == 403) {
+                    emit(DownloadStatus.Error("Authentication failed. Hugging Face might require a token."))
+                    return@flow
+                }
+                
+                if (existingLength > 0 && response.code != 206) {
+                    // Server doesn't support Range, restart
+                    targetFile.delete()
+                    downloadFromBeginning(modelUrl, targetFile, this)
+                    return@flow
+                }
 
-            // Load TFLite interpreter
-            val options = LiteRTInterpreter.Options()
-                .setNumThreads(4)
-                .setUseNNAPI(true)
-
-            interpreter = LiteRTInterpreter.createFromFile(modelFile.absolutePath, options)
-
-            _loadProgress.value = 0.7f
-
-            // Create tokenizer
-            val tokenizer = BPETokenizer.createMinimal()
-
-            // Create sampler
-            val sampler = Sampler(tokenizer.vocabSize())
-
-            // Create safety classifier
-            val safetyModel = com.aegis.ai.safety.RuleBasedSafetyModel()
-            val safetyClassifier = SafetyClassifier(safetyModel)
-
-            // Create LLM runtime with real components
-            val config = com.aegis.ai.runtime.LLMConfig(
-                vocabSize = tokenizer.vocabSize(),
-                maxSeqLen = 512,
-                numLayers = 28,
-                numHeads = 32,
-                headDim = 128
-            )
-
-            llmRuntime = LLMRuntimeFactory.create(
-                interpreter = interpreter!!,
-                tokenizer = tokenizer,
-                sampler = sampler,
-                safetyClassifier = safetyClassifier,
-                config = config
-            )
-
-            // Initialize runtime
-            llmRuntime?.initialize()
-
-            _loadProgress.value = 1.0f
-            _isModelLoaded.value = true
-            _isLoading.value = false
-
-            return true
-        } catch (e: Exception) {
-            _errorMessage.value = "Failed to load model: ${e.message}"
-            _isLoading.value = false
-            _isModelLoaded.value = false
-            return false
-        }
-    }
-
-    private suspend fun downloadModel(destinationFile: File) {
-        _loadProgress.value = 0.2f
-
-        // Check available storage
-        val availableSpace = context.filesDir.freeSpace
-        if (availableSpace < MODEL_SIZE_BYTES * 1.2) {
-            throw InsufficientStorageException("Not enough storage space. Required: ${MODEL_SIZE_BYTES / (1024 * 1024)}MB")
-        }
-
-        _loadProgress.value = 0.25f
-
-        // Real Download Implementation
-        val url = "https://huggingface.co/google/gemma-3n-it-tflite/resolve/main/$MODEL_FILE_NAME"
-        val client = okhttp3.OkHttpClient()
-        val request = okhttp3.Request.Builder().url(url).build()
-
-        withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw java.io.IOException("Failed to download model: $response")
+                if (!response.isSuccessful) {
+                    emit(DownloadStatus.Error("Download failed: ${response.code}"))
+                    return@flow
+                }
                 
                 val body = response.body ?: throw java.io.IOException("Empty response body")
-                val contentLength = body.contentLength()
+                val totalToDownload = if (existingLength > 0) body.contentLength() + existingLength else body.contentLength()
                 
-                destinationFile.parentFile?.mkdirs()
+                targetFile.parentFile?.mkdirs()
                 
-                body.byteStream().use { input ->
-                    destinationFile.outputStream().use { output ->
-                        val buffer = ByteArray(8192)
+                FileOutputStream(targetFile, existingLength > 0).use { output ->
+                    body.byteStream().use { input ->
+                        val buffer = ByteArray(64 * 1024)
                         var bytesRead: Int
-                        var totalBytesRead = 0L
+                        var totalDownloaded = existingLength
                         
                         while (input.read(buffer).also { bytesRead = it } != -1) {
                             output.write(buffer, 0, bytesRead)
-                            totalBytesRead += bytesRead
-                            if (contentLength > 0) {
-                                _loadProgress.value = 0.25f + (totalBytesRead.toFloat() / contentLength * 0.4f)
+                            totalDownloaded += bytesRead
+                            
+                            if (totalToDownload > 0) {
+                                val progress = ((totalDownloaded * 100) / totalToDownload).toInt()
+                                emit(DownloadStatus.Progress(progress))
+                                _loadProgress.value = totalDownloaded.toFloat() / totalToDownload
                             }
                         }
                     }
                 }
-            }
-        }
-        
-        _loadProgress.value = 0.65f
-    }
-
-    fun classifyText(text: String, task: String): Float {
-        if (!_isModelLoaded.value || llmRuntime == null) {
-            return 0f
-        }
-
-        return try {
-            // Use safety classifier for classification
-            val safetyResult = llmRuntime?.classifySafety(text)
-
-            // Convert safety result to scam probability
-            when (safetyResult?.category) {
-                SafetyClassifier.SafetyCategory.SCAM_FRAUD -> safetyResult.confidence
-                SafetyClassifier.SafetyCategory.PHISHING -> safetyResult.confidence * 0.9f
-                SafetyClassifier.SafetyCategory.MALICIOUS_CODE -> safetyResult.confidence * 0.8f
-                else -> 0f
+                
+                if (targetFile.length() == EXPECTED_SIZE_BYTES) {
+                    emit(DownloadStatus.Success(targetFile))
+                } else {
+                    emit(DownloadStatus.Error("File size mismatch after download."))
+                }
             }
         } catch (e: Exception) {
-            0f
+            emit(DownloadStatus.Error(e.localizedMessage ?: "Unknown error occurred"))
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
-    fun generateResponse(prompt: String, context: String = ""): String {
-        if (!_isModelLoaded.value || llmRuntime == null) {
-            return "Model not loaded"
-        }
+    private suspend fun downloadFromBeginning(url: String, targetFile: File, collector: kotlinx.coroutines.flow.FlowCollector<DownloadStatus>) {
+        val request = Request.Builder().url(url).apply {
+            if (HF_TOKEN.isNotEmpty()) addHeader("Authorization", "Bearer $HF_TOKEN")
+        }.build()
 
-        return try {
-            val fullPrompt = if (context.isNotEmpty()) {
-                "$context\n\n$prompt"
-            } else {
-                prompt
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                collector.emit(DownloadStatus.Error("Download failed: ${response.code}"))
+                return
             }
+            val body = response.body ?: return
+            val totalBytes = body.contentLength()
+            var bytesDownloaded = 0L
 
-            val params = SamplingParams.balanced()
-            val result = llmRuntime?.generate(fullPrompt, params)
-
-            result?.text ?: "Generation failed"
-        } catch (e: Exception) {
-            "Error generating response: ${e.message}"
+            FileOutputStream(targetFile).use { output ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        bytesDownloaded += bytesRead
+                        if (totalBytes > 0) {
+                            val progress = ((bytesDownloaded * 100) / totalBytes).toInt()
+                            collector.emit(DownloadStatus.Progress(progress))
+                            _loadProgress.value = bytesDownloaded.toFloat() / totalBytes
+                        }
+                    }
+                }
+            }
+            collector.emit(DownloadStatus.Success(targetFile))
         }
     }
 
-    fun getRuntimeStats(): com.aegis.ai.runtime.RuntimeStats? {
-        return llmRuntime?.getStats()
+    fun setModelLoaded(loaded: Boolean) {
+        _isModelLoaded.value = loaded
+    }
+
+    fun setLoading(loading: Boolean) {
+        _isLoading.value = loading
+    }
+
+    fun setErrorMessage(message: String?) {
+        _errorMessage.value = message
     }
 
     fun unloadModel() {
-        llmRuntime?.close()
-        llmRuntime = null
-        interpreter?.close()
-        interpreter = null
         _isModelLoaded.value = false
     }
 
     fun getModelInfo(): GemmaModelInfo {
-        val modelFile = File(context.filesDir, MODEL_FILE_NAME)
+        val file = getModelFile()
         return GemmaModelInfo(
             name = "Gemma 3N",
-            version = MODEL_VERSION,
-            size = if (modelFile.exists()) modelFile.length() else 0L,
+            version = "1.0.0",
+            size = if (file.exists()) file.length() else 0L,
             isLoaded = _isModelLoaded.value,
             loadedAt = if (_isModelLoaded.value) System.currentTimeMillis() else null
         )
-    }
-
-    fun clearModelCache() {
-        val modelFile = File(context.filesDir, MODEL_FILE_NAME)
-        if (modelFile.exists()) {
-            modelFile.delete()
-        }
-        unloadModel()
     }
 }
 
@@ -234,8 +209,4 @@ data class GemmaModelInfo(
     val size: Long,
     val isLoaded: Boolean,
     val loadedAt: Long?
-) {
-    fun getSizeInMB(): Double = size / (1024.0 * 1024.0)
-}
-
-class InsufficientStorageException(message: String) : Exception(message)
+)

@@ -78,6 +78,54 @@ class PrivacyAgent(
         )
     }
 
+    private fun analyzePermissionRequest(context: AnalysisContext): AgentResult {
+        val text = context.text?.lowercase() ?: ""
+        
+        val permissions = mapOf(
+            "Location" to listOf("location", "gps", "where you are", "whereabouts"),
+            "Camera" to listOf("camera", "take pictures", "record video"),
+            "Microphone" to listOf("microphone", "record audio", "listen to"),
+            "Contacts" to listOf("contacts", "address book", "people you know"),
+            "SMS" to listOf("sms", "messages", "text messages", "send and view"),
+            "Storage" to listOf("storage", "files", "photos", "media", "sd card"),
+            "Calendar" to listOf("calendar", "schedule", "events"),
+            "Call Log" to listOf("call log", "phone calls", "call history")
+        )
+
+        val detectedPermissions = permissions.filter { (_, keywords) ->
+            keywords.any { text.contains(it) }
+        }.keys
+
+        if (detectedPermissions.isEmpty()) {
+            return AgentResult(
+                agentName = name,
+                threatLevel = ThreatLevel.SUSPICIOUS,
+                confidence = 0.5f,
+                reason = "A permission request was detected but the specific type could not be identified.",
+                suggestedAction = "Carefully review why this app needs permissions."
+            )
+        }
+
+        val threatLevel = if (detectedPermissions.any { it in listOf("Location", "Camera", "Microphone", "Contacts") }) {
+            ThreatLevel.LIKELY_MALICIOUS
+        } else {
+            ThreatLevel.SUSPICIOUS
+        }
+
+        return AgentResult(
+            agentName = name,
+            threatLevel = threatLevel,
+            confidence = 0.9f,
+            reason = "App is requesting access to sensitive data: ${detectedPermissions.joinToString(", ")}",
+            details = mapOf(
+                "detectedPermissions" to detectedPermissions.joinToString(","),
+                "is_permission_dialog" to "true"
+            ),
+            suggestedAction = "Only grant these permissions if you trust the app and it truly needs them for its core function.",
+            requiresUserAttention = threatLevel.value >= ThreatLevel.LIKELY_MALICIOUS.value
+        )
+    }
+
     private fun computeScore(sensitive: Map<String, Int>, intrusive: List<String>): Float {
         var score = 0f
         sensitive.forEach { (type, count) ->

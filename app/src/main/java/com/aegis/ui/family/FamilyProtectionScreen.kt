@@ -1,6 +1,7 @@
 package com.aegis.ui.family
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -91,7 +92,7 @@ fun FamilyProtectionScreen(
                         onResolve = { 
                             currentUser?.id?.let { familyManager.resolveAlert(alert.id, it) }
                         },
-                        canResolve = currentUser?.let { 
+                        canResolve = currentUser?.id?.let {
                             familyManager.hasPermission(it, FamilyPermission.VIEW_ALERTS)
                         } ?: false
                     )
@@ -116,11 +117,11 @@ fun FamilyProtectionScreen(
                             familyManager.toggleProtection(member.id, enabled, it)
                         }
                     },
-                    canToggleProtection = currentUser?.let { userId ->
-                        when (currentUser.role) {
+                    canToggleProtection = currentUser?.let { user ->
+                        when (user.role) {
                             FamilyRole.ADMIN -> true
                             FamilyRole.GUARDIAN -> member.role == FamilyRole.CHILD
-                            FamilyRole.MEMBER -> userId == member.id
+                            FamilyRole.MEMBER -> user.id == member.id
                             FamilyRole.CHILD -> false
                         }
                     } ?: false
@@ -156,7 +157,7 @@ fun FamilyProtectionScreen(
                 }
                 showSettingsDialog = false
             },
-            canEdit = currentUser?.let { 
+            canEdit = currentUser?.id?.let {
                 familyManager.hasPermission(it, FamilyPermission.MANAGE_SETTINGS)
             } ?: false
         )

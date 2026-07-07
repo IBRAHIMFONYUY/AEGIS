@@ -91,7 +91,7 @@ fun ThreatMapComponent(modifier: Modifier = Modifier) {
                             ThreatType.MALWARE -> "Malicious app installation blocked"
                             ThreatType.MOMO_FRAUD -> "Unauthorized MoMo transaction attempt"
                             ThreatType.IDENTITY_THEFT -> "Personal data harvesting attempt"
-                            ThreatType.DEEFAKE -> "Synthetic media content detected"
+                            ThreatType.DEEPFAKE -> "Synthetic media content detected"
                         }
                     )
                 } else null

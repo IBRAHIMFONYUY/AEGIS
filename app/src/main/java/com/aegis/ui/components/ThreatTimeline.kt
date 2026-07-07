@@ -93,10 +93,11 @@ private fun ThreatTimelineItem(threat: ThreatEvent) {
                     Text(
                         text = threat.reason,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = threatColor
                     )
                     Text(
-                        text = "Source: ${threat.sourceApp ?: "Unknown App"}",
+                        text = "Source: ${threat.sourceApp ?: "System"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -105,22 +106,61 @@ private fun ThreatTimelineItem(threat: ThreatEvent) {
                 ThreatLevelIndicator(threatLevel = level)
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = threat.sourceText,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(8.dp),
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                )
+            if (threat.sourceText.isNotBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Detected Content:",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = threat.sourceText,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    }
+                }
             }
             
-            Spacer(modifier = Modifier.height(4.dp))
+            if (threat.suggestedAction != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = threatColor.copy(alpha = 0.1f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.Lightbulb,
+                            contentDescription = null,
+                            tint = threatColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "AEGIS Advice: ${threat.suggestedAction}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = threatColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
             
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -132,15 +172,6 @@ private fun ThreatTimelineItem(threat: ThreatEvent) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )
-                
-                if (threat.suggestedAction != null) {
-                    Text(
-                        text = "Advice: ${threat.suggestedAction}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = threatColor,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
         }
     }

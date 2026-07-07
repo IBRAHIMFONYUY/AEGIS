@@ -29,7 +29,10 @@ fun AssistantScreen(
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
     val isModelLoaded by viewModel.isModelLoaded.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     val loadProgress by viewModel.loadProgress.collectAsState()
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val installError by viewModel.installError.collectAsState()
 
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -122,18 +125,61 @@ fun AssistantScreen(
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        "Initializing Local Guardian Engine...",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AegisPrimaryLight
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { loadProgress },
-                        modifier = Modifier.fillMaxWidth().height(4.dp),
-                        color = AegisPrimaryLight,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    when {
+                        downloadProgress != null && downloadProgress!! < 100 -> {
+                            Text(
+                                "Downloading Gemma 3N: $downloadProgress%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AegisPrimaryLight
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { downloadProgress!!.toFloat() / 100f },
+                                modifier = Modifier.fillMaxWidth().height(4.dp),
+                                color = AegisPrimaryLight,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        }
+                        isLoading -> {
+                            Text(
+                                "Initializing Local Guardian Engine...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AegisPrimaryLight
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { loadProgress },
+                                modifier = Modifier.fillMaxWidth().height(4.dp),
+                                color = AegisPrimaryLight,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        }
+                        else -> {
+                            if (installError != null) {
+                                Text(
+                                    installError!!,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            Button(
+                                onClick = { viewModel.triggerInstall() },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = AegisPrimaryLight)
+                            ) {
+                                Icon(Icons.Filled.Download, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Install Local Guardian Engine (1.5GB)")
+                            }
+                            Text(
+                                "Gemma 3N: 100% Offline AI reasoning",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
 
