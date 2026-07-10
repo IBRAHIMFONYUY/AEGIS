@@ -25,6 +25,7 @@ import com.aegis.ui.academy.ScamSimulatorScreen
 import com.aegis.ui.assistant.AssistantScreen
 import com.aegis.ui.dashboard.DashboardScreen
 import com.aegis.ui.privacy.PrivacyScreen
+import com.aegis.ui.profile.ProfileScreen
 import com.aegis.ui.settings.SettingsScreen
 import com.aegis.ui.threatlog.ThreatLogScreen
 import com.aegis.ui.vault.VaultScreen
@@ -37,6 +38,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object ThreatIntel : Screen("threat_intel", "Threat Intel", Icons.Filled.Public)
     data object Academy : Screen("academy", "Academy", Icons.Filled.School)
     data object Settings : Screen("settings", "Settings", Icons.Filled.Settings)
+    data object Profile : Screen("profile", "Profile", Icons.Filled.Person)
 }
 
 val bottomNavItems = listOf(
@@ -44,7 +46,7 @@ val bottomNavItems = listOf(
     Screen.Assistant,
     Screen.Privacy,
     Screen.Vault,
-    Screen.ThreatIntel
+    Screen.Profile
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -123,6 +125,12 @@ fun AegisNavGraph(
             composable(Screen.ThreatIntel.route) {
                 ThreatLogScreen(
                     threatRepository = threatRepository
+                )
+            }
+            composable(Screen.Profile.route) {
+                ProfileScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
                 )
             }
         }

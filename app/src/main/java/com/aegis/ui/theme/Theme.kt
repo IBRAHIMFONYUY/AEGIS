@@ -30,13 +30,13 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = AegisPrimary,
-    onPrimary = Color.White,
+    onPrimary = Color.Black, // Darker text on yellow
     primaryContainer = AegisPrimaryLight,
     secondary = AegisSecondary,
     onSecondary = Color.White,
     background = BackgroundLight,
     surface = SurfaceLight,
-    surfaceVariant = Color(0xFFE8EAF6),
+    surfaceVariant = SurfaceVariantLight,
     onBackground = OnSurfaceLight,
     onSurface = OnSurfaceLight,
     error = DangerRed,
@@ -45,7 +45,7 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun AegisTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false, // Force Light Theme as primary choice for "White Light" theme
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -65,6 +65,7 @@ fun AegisTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AegisTypography,
+        shapes = AegisShapes,
         content = content
     )
 }

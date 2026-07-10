@@ -58,8 +58,9 @@ class RuleBasedSafetyModel : SafetyModel {
     
     private val harassmentPatterns = listOf(
         "stupid", "idiot", "loser", "worthless", "pathetic",
-        "kill yourself", "go die", "nobody likes you", "you should",
-        "ugly", "disgusting", "repulsive", "freak"
+        "kill you", "kill yourself", "go die", "nobody likes you",
+        "ugly", "disgusting", "repulsive", "freak", "cut you", "beat you",
+        "your house", "your family", "know where you live", "murder"
     )
     
 

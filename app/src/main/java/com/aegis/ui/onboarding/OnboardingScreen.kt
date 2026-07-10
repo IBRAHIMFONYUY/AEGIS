@@ -199,7 +199,7 @@ fun OnboardingScreen(
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = OnSurfaceDark
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = AegisButtonShape
                     ) {
                         Text("Back")
                     }
@@ -219,7 +219,7 @@ fun OnboardingScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = pages[currentPage].color
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = AegisButtonShape
                 ) {
                     Text(
                         if (currentPage < pages.size - 1) "Next" else "Get Started",
@@ -255,7 +255,7 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         Box(
             modifier = Modifier
                 .size(200.dp)
-                .clip(RoundedCornerShape(32.dp))
+                .clip(AegisCardShape)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(

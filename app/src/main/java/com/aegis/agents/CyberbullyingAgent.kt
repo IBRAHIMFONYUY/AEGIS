@@ -55,12 +55,25 @@ class CyberbullyingAgent(
             }
         }
 
-        val mlScore = inferenceEngine?.classify(text, "toxicity") ?: 0f
-
+        val mlScore = if (context.precomputedAiResult != null) {
+            if (context.precomputedAiResult.threatType == "harassment") context.precomputedAiResult.confidence else 0.1f
+        } else {
+            inferenceEngine?.classify(text, "toxicity", context.metadata) ?: 0f
+        }
         val patternScore = computeScore(matchedCategories)
-        // Increased weight for AI/ML analysis (0.8 vs 0.2)
-        val combinedScore = (patternScore * 0.2f + mlScore * 0.8f)
+
+        // Contextual legit check: 
+        // If pattern matches but ML/AI says it's clean, we trust the AI context more
+        val combinedScore = if (mlScore < 0.2f && patternScore > 0.4f) {
+            0.1f // Downgrade to safe/insignificant
+        } else {
+            (patternScore * 0.15f + mlScore * 0.85f)
+        }
+        
         val threatLevel = scoreToThreatLevel(combinedScore)
+
+        // Only report if it's a real, high-confidence threat
+        if (combinedScore < 0.3f) return safeResult
 
         val categoryLabels = matchedCategories.keys.joinToString(", ")
         val severity = assessSeverity(matchedCategories)

@@ -66,6 +66,7 @@ object AIModule {
     @Provides
     @Singleton
     fun provideGuardianAgents(
+        @ApplicationContext context: Context,
         inferenceEngine: InferenceEngine,
         reasoningEngine: ReasoningEngine,
         imageAnalyzer: ImageAnalyzer,
@@ -75,6 +76,7 @@ object AIModule {
         val baseAgents = listOf(
             ScamAgent(inferenceEngine, threatIntelClient, gemmaEngine),
             PrivacyAgent(inferenceEngine),
+            PrivacyAdvisorAgent(context, reasoningEngine),
             CyberbullyingAgent(inferenceEngine),
             MisinformationAgent(inferenceEngine),
             IntentAgent(inferenceEngine, reasoningEngine),

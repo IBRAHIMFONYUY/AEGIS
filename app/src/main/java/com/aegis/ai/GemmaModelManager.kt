@@ -19,10 +19,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import android.net.Uri
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
 sealed interface DownloadStatus {
@@ -73,7 +76,7 @@ class GemmaModelManager(private val context: Context) {
     companion object {
         private const val TAG = "GemmaModelManager"
         private const val MODEL_FILE_NAME = "gemma-3n-E2B-it-int4.litertlm"
-        private const val EXPECTED_SIZE_BYTES = 3_800_000_000L // ~3.8GB
+        private const val EXPECTED_SIZE_BYTES = 1_000_000_000L // 1GB threshold to catch all Gemma variants
         private const val BASE_URL = "https://huggingface.co/ibrahimfonyuy06/gemma3bforaegis/resolve/main/gemma-3n-E2B-it-int4.litertlm"
 
         // Loaded from BuildConfig, which is populated from local.properties at build time.
@@ -85,7 +88,7 @@ class GemmaModelManager(private val context: Context) {
 
     fun isModelInstalled(): Boolean {
         val file = getModelFile()
-        return file.exists() && file.length() == EXPECTED_SIZE_BYTES
+        return file.exists() && file.length() >= EXPECTED_SIZE_BYTES
     }
 
     /**
@@ -221,23 +224,158 @@ class GemmaModelManager(private val context: Context) {
      * engine.initialize() can take up to ~10 seconds. Safe to call more than once; it's a
      * no-op if an engine/conversation already exist.
      */
+
+    private val supportedModelNames = listOf(
+        "gemma-3n-E2B-it-int4.litertlm",
+        "gemma3.litertlm",
+        "gemma.litertlm",
+        "gemma-2b-it.litertlm",
+        "gemma-2b-it-int4.litertlm",
+        "gemma-1.1-2b-it.litertlm",
+        "gemma-3b-it.litertlm",
+        "gemma-3b-it-int4.litertlm"
+    )
+
+    private fun findExistingModel(): File? {
+        // 1. Internal storage check first
+        val internal = getModelFile()
+        if (internal.exists() && internal.length() >= EXPECTED_SIZE_BYTES) return internal
+
+        // 2. Search common public directories
+        val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        val documentDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
+        
+        // Also check standard paths explicitly as fallback
+        val storagePath = android.os.Environment.getExternalStorageDirectory().path
+        val explicitPaths = listOf(
+            File("/storage/emulated/0/Download"),
+            File("/storage/emulated/0/Downloads"),
+            File("/storage/emulated/0/Documents"),
+            File("/storage/emulated/0/Models"),
+            File("$storagePath/Download"),
+            File("$storagePath/Downloads"),
+            File("$storagePath/Documents"),
+            File("$storagePath/Models")
+        )
+
+        val searchDirs = (listOfNotNull(downloadDir, documentDir, android.os.Environment.getExternalStorageDirectory()) + explicitPaths).distinct()
+        Timber.tag(TAG).d("Searching for model in: %s", searchDirs.joinToString { it.absolutePath })
+
+        searchDirs.forEach { dir ->
+            try {
+                val found = searchFileRecursively(dir)
+                if (found != null) {
+                    Timber.tag(TAG).i("Found existing model at: %s", found.absolutePath)
+                    return found
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Error searching directory %s", dir.absolutePath)
+            }
+        }
+
+        return null
+    }
+
+    private fun searchFileRecursively(directory: File, depth: Int = 0): File? {
+        if (depth > 5) return null // Slightly deeper search
+        if (!directory.exists() || !directory.isDirectory) return null
+        
+        val files = directory.listFiles()
+        if (files == null) {
+            Timber.tag(TAG).w("Cannot list files in %s (access denied?)", directory.absolutePath)
+            return null
+        }
+        
+        // Priority 1: Exact matches, contains "gemma", or ANY .litertlm/.tflite file
+        for (file in files) {
+            if (file.isFile) {
+                val name = file.name.lowercase()
+                val isModelFile = name.endsWith(".litertlm") || 
+                                 name.endsWith(".tflite") ||
+                                 supportedModelNames.any { it.lowercase() == name }
+                
+                if (isModelFile && file.length() >= EXPECTED_SIZE_BYTES) {
+                    return file
+                }
+            }
+        }
+        
+        // Priority 2: Subdirectories
+        for (file in files) {
+            if (file.isDirectory && !file.name.startsWith(".")) {
+                val found = searchFileRecursively(file, depth + 1)
+                if (found != null) return found
+            }
+        }
+        
+        return null
+    }
+
+    private fun copyModelToInternal(source: File): File {
+        val destination = getModelFile()
+        if (destination.exists()) destination.delete()
+        source.copyTo(destination)
+        return destination
+    }
+
+    fun importModel(uri: Uri): Boolean {
+        _isLoading.value = true
+        return try {
+            val availableSpace = context.filesDir.freeSpace
+            if (availableSpace < EXPECTED_SIZE_BYTES + (500 * 1024 * 1024)) {
+                setErrorMessage("Insufficient storage to import model. Need at least 4.5GB free.")
+                return false
+            }
+
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val destination = getModelFile()
+                destination.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        } finally {
+            _isLoading.value = false
+        }
+    }
     suspend fun initializeEngine(): Boolean = withContext(Dispatchers.Default) {
         if (engine != null && conversation != null) return@withContext true
 
-        val modelFile = getModelFile()
-        if (!modelFile.exists()) {
-            setErrorMessage("Model file not found. Please download the Gemma 3N model first.")
-            return@withContext false
+        var modelFile = getModelFile()
+        Timber.tag(TAG).d("Initializing engine. Internal model exists: %s", modelFile.exists())
+
+        if (!modelFile.exists() || modelFile.length() < EXPECTED_SIZE_BYTES) {
+            Timber.tag(TAG).d("Internal model missing or incomplete. Searching external storage...")
+            val existing = findExistingModel()
+            if (existing != null) {
+                // If we found it externally and have permission, use it directly to save space
+                // instead of copying it to internal storage.
+                Timber.tag(TAG).d("Using existing model in-place at %s", existing.absolutePath)
+                modelFile = existing
+            } else {
+                Timber.tag(TAG).w("Model not found in Downloads or Documents.")
+                setErrorMessage("Gemma model not found. Please download or choose a model file.")
+                return@withContext false
+            }
         }
 
         setLoading(true)
         try {
+            // Check if we have enough space for the engine's cache.
+            // LiteRT-LM can use significant space for compiled model caching.
+            val freeSpace = context.cacheDir.freeSpace
+            // Be very conservative: Only use cache if we have > 2GB free
+            // This prevents the "filling up remaining space" issue.
+            val useCache = freeSpace > 2_000_000_000L 
+            
+            Timber.tag(TAG).d("Free space: %d bytes. Use cache: %s", freeSpace, useCache)
+            
             val engineConfig = EngineConfig(
                 modelPath = modelFile.absolutePath,
-                backend = Backend.CPU(), // Switch to Backend.GPU() once the manifest's
-                // <uses-native-library> entries for libvndksupport.so /
-                // libOpenCL.so are in place, if you want GPU accel.
-                cacheDir = context.cacheDir.path // Speeds up subsequent loads.
+                backend = Backend.CPU(),
+                cacheDir = if (useCache) context.cacheDir.path else null
             )
 
             val newEngine = Engine(engineConfig)
@@ -260,6 +398,8 @@ class GemmaModelManager(private val context: Context) {
             setLoading(false)
         }
     }
+
+
 
     /**
      * Blocks until a complete response is generated. Applies your safety classifier to

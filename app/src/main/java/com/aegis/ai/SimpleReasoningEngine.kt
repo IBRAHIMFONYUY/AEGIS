@@ -8,7 +8,8 @@ class SimpleReasoningEngine : ReasoningEngine {
 
     override suspend fun generateResponse(
         prompt: String,
-        context: String?
+        context: String?,
+        metadata: Map<String, String>
     ): String {
 
         return "Based on my analysis, this interaction shows signs of potential risk. " +
@@ -30,7 +31,8 @@ class SimpleReasoningEngine : ReasoningEngine {
 
 
     override suspend fun summarizeConversation(
-        history: List<String>
+        history: List<String>,
+        metadata: Map<String, String>
     ): String {
 
         return """
@@ -49,7 +51,8 @@ class SimpleReasoningEngine : ReasoningEngine {
 
     override suspend fun analyzeConversation(
         history: List<String>,
-        currentMessage: String
+        currentMessage: String,
+        metadata: Map<String, String>
     ): String {
 
 

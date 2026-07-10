@@ -2,9 +2,13 @@ package com.aegis.data.repository
 
 import com.aegis.data.db.dao.MemoryDao
 import com.aegis.data.db.entity.MemoryEntry
+import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
+import com.aegis.agents.BehavioralMetrics
 
 class GuardianMemoryRepository(private val memoryDao: MemoryDao) {
+    private val gson = Gson()
 
     suspend fun store(
         key: String,
@@ -93,24 +97,31 @@ class GuardianMemoryRepository(private val memoryDao: MemoryDao) {
         return getLatest("CONTACT_SUMMARY_$contactId", "MemoryAgent")
     }
 
-    suspend fun storeBehavioralData(chatId: String?, behaviorMetrics: Any, timestamp: Long) {
+    suspend fun storeBehavioralData(chatId: String?, behaviorMetrics: BehavioralMetrics, timestamp: Long) {
         if (chatId == null) return
         val key = "BEHAVIOR_$chatId"
-        // Use a simple string representation or JSON if available
         store(
             key = "${key}_$timestamp",
-            value = behaviorMetrics.toString(),
+            value = gson.toJson(behaviorMetrics),
             agentName = "BehavioralAgent",
             category = "USER_BEHAVIOR",
             ttlMillis = 30 * 24 * 60 * 60 * 1000L // 30 days
         )
     }
 
-    suspend fun getBehavioralHistory(chatId: String, limit: Int): List<com.aegis.agents.BehavioralMetrics> {
-        // This is a bit tricky since we don't have a structured behavioral store here.
-        // We'll return an empty list for now or try to parse if needed.
-        // In a real app, we'd have a specific table for behavioral metrics.
-        return emptyList()
+    suspend fun getBehavioralHistory(chatId: String, limit: Int): List<BehavioralMetrics> {
+        val entries = memoryDao.getByCategoryAndAgent("USER_BEHAVIOR", "BehavioralAgent").firstOrNull() ?: return emptyList()
+        val result = entries
+            .filter { it.key.startsWith("BEHAVIOR_$chatId") }
+            .takeLast(limit)
+            .mapNotNull { 
+                try {
+                    gson.fromJson(it.value, BehavioralMetrics::class.java)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        return result
     }
 
     suspend fun cleanup() {

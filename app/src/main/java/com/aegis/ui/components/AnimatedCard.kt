@@ -18,11 +18,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 
+import com.aegis.ui.theme.AegisCardShape
+
 @Composable
 fun AnimatedCard(
     visible: Boolean,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = AegisCardShape,
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     colors: CardColors = CardDefaults.cardColors(),
     content: @Composable ColumnScope.() -> Unit
@@ -57,7 +59,7 @@ fun AnimatedCard(
 fun ScaleInCard(
     visible: Boolean,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = AegisCardShape,
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     colors: CardColors = CardDefaults.cardColors(),
     content: @Composable ColumnScope.() -> Unit
@@ -96,7 +98,7 @@ fun ScaleInCard(
 @Composable
 fun ShimmerLoadingCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = AegisCardShape,
     contentColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
@@ -128,7 +130,7 @@ fun ShimmerLoadingCard(
 @Composable
 fun PulseCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = AegisCardShape,
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     colors: CardColors = CardDefaults.cardColors(),
     isPulsing: Boolean = true,
@@ -218,7 +220,7 @@ fun SwipeToRevealCard(
     // In a full implementation, this would use swipe gestures
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp)
+        shape = AegisCardShape
     ) {
         content()
     }

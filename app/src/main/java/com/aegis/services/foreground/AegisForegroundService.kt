@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.IBinder
 import android.os.Build
 import android.content.pm.ServiceInfo
+import timber.log.Timber
 import androidx.core.app.NotificationCompat
 import com.aegis.AegisApplication
 import com.aegis.agents.GuardianCore
@@ -49,7 +50,7 @@ class AegisForegroundService : Service() {
             }
             startContinuousScanning()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to start foreground service")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -94,12 +95,14 @@ class AegisForegroundService : Service() {
     }
 
     private suspend fun performBackgroundScan() {
-        // Continuous scan could check clipboard or other light signals
-        // For now, just a heartbeat analysis to ensure engine is alive
+        // Heartbeat scan to ensure engine is alive, strictly marked as background
         val context = com.aegis.core.AnalysisContext(
             text = "Active background protection heartbeat",
             sourceType = com.aegis.core.SourceType.UNKNOWN,
-            metadata = mapOf("heartbeat" to "true")
+            metadata = mapOf(
+                "heartbeat" to "true",
+                "source_type" to "UNKNOWN"
+            )
         )
         guardianCore.analyze(context)
     }

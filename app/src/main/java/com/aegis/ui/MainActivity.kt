@@ -8,9 +8,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Process
 import android.provider.Settings
-import android.util.Log
+import timber.log.Timber
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,7 +22,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.aegis.agents.GuardianCore
+import kotlinx.coroutines.launch
 import com.aegis.data.repository.LearningRepository
 import com.aegis.data.repository.SafetyRepository
 import com.aegis.data.repository.SettingsRepository
@@ -72,6 +75,11 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
             checkSpecialPermissions()
             startAegisService()
+            
+            // Try to load the AI engine once permissions are granted
+            lifecycleScope.launch {
+                guardianCore.gemmaEngine?.loadModel()
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,6 +112,17 @@ class MainActivity : ComponentActivity() {
         requestPermissions()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // If the user just came back from settings after granting "All Files Access",
+        // try to load the model again automatically.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+            lifecycleScope.launch {
+                guardianCore.gemmaEngine?.loadModel()
+            }
+        }
+    }
+
     private fun requestPermissions() {
 
         val permissionsToRequest = requiredPermissions.filterNot(::hasPermission)
@@ -127,6 +146,17 @@ class MainActivity : ComponentActivity() {
 
         if (!hasUsageStatsPermission()) {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:$packageName")
+                startActivity(intent)
+            } catch (e: Exception) {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                startActivity(intent)
+            }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
@@ -175,7 +205,7 @@ class MainActivity : ComponentActivity() {
                 startService(serviceIntent)
             }
         }.onFailure {
-            Log.e(TAG, "Failed to start AEGIS foreground service.", it)
+            Timber.tag(TAG).e(it, "Failed to start AEGIS foreground service.")
         }
     }
 }

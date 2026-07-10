@@ -24,8 +24,14 @@ class DashboardViewModel @Inject constructor(
     private val safetyRepository: SafetyRepository,
     private val threatRepository: ThreatRepository,
     private val settingsRepository: SettingsRepository,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    companion object {
+        /** Single source of truth for the "protected" threshold used by the dashboard UI. */
+        const val SAFE_THRESHOLD = 0.8f
+        private const val AGENT_STATUS_POLL_INTERVAL_MS = 30_000L
+    }
 
     val userName: StateFlow<String> = flow {
         emit(settingsRepository.getString(SettingsRepository.KEY_USER_NAME, "Guardian"))
@@ -38,8 +44,32 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val isAnalyzing: StateFlow<Boolean> = guardianCore.isAnalyzing
-    
+
     val lastResult: StateFlow<AnalysisResult?> = guardianCore.lastAnalysis
+
+    /**
+     * Derived "is the device currently protected" flag, computed once here instead of the
+     * UI re-deriving `guardianScore.overall >= SAFE_THRESHOLD` itself. Keeps the threshold
+     * and the comparison in one testable place.
+     */
+    val isProtected: StateFlow<Boolean> = guardianCore.guardianScore
+        .map { it.overall >= SAFE_THRESHOLD }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /**
+     * Time-of-day greeting, exposed as a flow (rather than computed once in the composable)
+     * so it stays correct if the dashboard is left open across an hour boundary or the
+     * process is restored from a long-lived saved instance.
+     */
+    val greeting: StateFlow<String> = flow {
+        while (true) {
+            emit(currentGreeting())
+            // Recompute at the next hour boundary rather than polling constantly.
+            val now = Calendar.getInstance()
+            val minutesToNextHour = 60 - now.get(Calendar.MINUTE)
+            delay(minutesToNextHour * 60_000L)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), currentGreeting())
 
     val protectionStats: StateFlow<ProtectionSummary> = combine(
         threatRepository.getScamsBlockedCount(getStartOfDay()),
@@ -58,6 +88,14 @@ class DashboardViewModel @Inject constructor(
     private val _agentStatuses = MutableStateFlow(guardianCore.getAgentStatuses())
     val agentStatuses = _agentStatuses.asStateFlow()
 
+    /**
+     * Surfaces scan failures to the UI (e.g. as a Snackbar) instead of the previous
+     * behavior where a thrown exception in runFullScan() silently ended the coroutine
+     * with no user-visible signal. Call [consumeScanError] after showing it once.
+     */
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError: StateFlow<String?> = _scanError.asStateFlow()
+
     init {
         viewModelScope.launch {
             guardianCore.analysisResults.collect {
@@ -68,9 +106,23 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 ensureActive()
-                _agentStatuses.value = guardianCore.getAgentStatuses()
-                delay(30000)
+                try {
+                    _agentStatuses.value = guardianCore.getAgentStatuses()
+                } catch (e: Exception) {
+                    // Don't let a single failed poll kill the loop or freeze the UI silently.
+                    // Wire this into your crash/telemetry reporter.
+                }
+                delay(AGENT_STATUS_POLL_INTERVAL_MS)
             }
+        }
+    }
+
+    private fun currentGreeting(): String {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return when (hour) {
+            in 0..11 -> "Good Morning"
+            in 12..16 -> "Good Afternoon"
+            else -> "Good Evening"
         }
     }
 
@@ -84,7 +136,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun hasPermission(permission: String): Boolean {
-        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(appContext, permission) == PackageManager.PERMISSION_GRANTED
     }
 
     fun refreshData() {
@@ -93,14 +145,23 @@ class DashboardViewModel @Inject constructor(
 
     fun runFullScan() {
         viewModelScope.launch {
-            val context = com.aegis.core.AnalysisContext(
-                text = "System wide scan initiated by user",
-                sourceType = com.aegis.core.SourceType.UNKNOWN,
-                metadata = mapOf("deep_scan" to "true")
-            )
-            guardianCore.analyze(context)
-            _agentStatuses.value = guardianCore.getAgentStatuses()
+            try {
+                val analysisContext = com.aegis.core.AnalysisContext(
+                    text = "System wide scan initiated by user",
+                    sourceType = com.aegis.core.SourceType.UNKNOWN,
+                    metadata = mapOf("deep_scan" to "true")
+                )
+                guardianCore.analyze(analysisContext)
+                _agentStatuses.value = guardianCore.getAgentStatuses()
+            } catch (e: Exception) {
+                _scanError.value = "Guardian scan couldn't complete. Please try again."
+            }
         }
+    }
+
+    /** Call from the UI after a scan-error Snackbar/toast has been shown, to avoid re-showing it. */
+    fun consumeScanError() {
+        _scanError.value = null
     }
 }
 

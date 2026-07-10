@@ -20,4 +20,7 @@ interface MemoryDao {
 
     @Query("SELECT * FROM guardian_memory WHERE agentName = :agentName")
     suspend fun getForAgent(agentName: String): List<MemoryEntry>
+
+    @Query("SELECT * FROM guardian_memory WHERE category = :category AND agentName = :agentName ORDER BY timestamp DESC")
+    fun getByCategoryAndAgent(category: String, agentName: String): Flow<List<MemoryEntry>>
 }

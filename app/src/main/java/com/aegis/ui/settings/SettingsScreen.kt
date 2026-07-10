@@ -57,7 +57,8 @@ fun SettingsScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface
-                    )
+                    ),
+                    shape = AegisCardShape
                 ) {
                     Row(
                         modifier = Modifier
@@ -108,7 +109,8 @@ fun SettingsScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = AegisCardShape
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(
@@ -156,7 +158,8 @@ fun SettingsScreen(
                         .padding(horizontal = 16.dp, vertical = 2.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
+                    ),
+                    shape = AegisCardShape
                 ) {
                     Row(
                         modifier = Modifier
@@ -194,7 +197,8 @@ fun SettingsScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = AegisCardShape
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("AEGIS v1.0.0", style = MaterialTheme.typography.titleSmall)

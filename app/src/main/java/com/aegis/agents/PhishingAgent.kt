@@ -85,7 +85,7 @@ class PhishingAgent(
         val mlScore = if (inferenceEngine is com.aegis.ai.GemmaInferenceEngine) {
             inferenceEngine.detectScam(url, context.metadata)
         } else {
-            inferenceEngine?.classify(url, "phishing_detection") ?: 0f
+            inferenceEngine?.classify(url, "phishing_detection", context.metadata) ?: 0f
         }
         phishingScore = (phishingScore * 0.4f + mlScore * 0.6f).coerceIn(0f, 1f)
 

@@ -4,6 +4,8 @@ import android.content.Context
 import com.aegis.BuildConfig
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.*
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,11 +14,29 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
+import java.util.concurrent.atomic.AtomicLong
+import timber.log.Timber
+
 /**
  * Gemini AI Manager for online AI fallback when local model is not available.
  * Uses Google Gemini API for cloud-based AI inference.
  */
 class GeminiAIManager(private val context: Context) {
+    
+    // --- QUOTA PROTECTION ---
+    private val apiCallCount = AtomicLong(0)
+    private val lastResetTime = AtomicLong(System.currentTimeMillis())
+    private val MAX_RPM = 15 // Increased to 15 (Gemini Free Tier limit)
+    
+    private fun checkQuota(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastResetTime.get() > 60000) {
+            apiCallCount.set(0)
+            lastResetTime.set(now)
+            return true
+        }
+        return apiCallCount.get() < MAX_RPM
+    }
     
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: Flow<Boolean> = _isInitialized.asStateFlow()
@@ -26,9 +46,10 @@ class GeminiAIManager(private val context: Context) {
     
     private var generativeModel: GenerativeModel? = null
     
+    private val gson = Gson()
+    
     companion object {
-        private const val TAG = "GeminiAIManager"
-        private const val MODEL_NAME = "gemini-1.5-flash"
+        private const val MODEL_NAME = "gemini-2.5-flash"
     }
     
     /**
@@ -60,7 +81,12 @@ class GeminiAIManager(private val context: Context) {
      * Generate a response using Gemini API
      */
     suspend fun generateResponse(prompt: String): String = withContext(Dispatchers.IO) {
+        if (!checkQuota()) {
+            Timber.tag("GeminiQuota").w("Quota Exceeded (RPM Limit)")
+            return@withContext "Cloud AI Quota Exceeded. Please try again in a minute or enable Privacy Mode."
+        }
         try {
+            apiCallCount.incrementAndGet()
             val model = generativeModel ?: initializeAndGetModel()
             
             val response = model?.generateContent(
@@ -98,7 +124,12 @@ class GeminiAIManager(private val context: Context) {
      * Analyze text for threat detection
      */
     suspend fun analyzeThreat(text: String, context: String = ""): ThreatAnalysisResult = withContext(Dispatchers.IO) {
+        if (!checkQuota()) {
+            Timber.tag("GeminiQuota").w("Quota Exceeded (RPM Limit)")
+            return@withContext ThreatAnalysisResult(false, "none", 0f, "Quota Exceeded", "Try later", null)
+        }
         try {
+            apiCallCount.incrementAndGet()
             val model = generativeModel ?: initializeAndGetModel()
             
             val prompt = buildThreatAnalysisPrompt(text, context)
@@ -130,7 +161,12 @@ class GeminiAIManager(private val context: Context) {
         currentMessage: String,
         senderInfo: String = ""
     ): ConversationAnalysisResult = withContext(Dispatchers.IO) {
+        if (!checkQuota()) {
+            Timber.tag("GeminiQuota").w("Quota Exceeded (RPM Limit)")
+            return@withContext ConversationAnalysisResult(false, null, 0f, "Quota Exceeded", emptyList(), emptyList())
+        }
         try {
+            apiCallCount.incrementAndGet()
             val model = generativeModel ?: initializeAndGetModel()
             
             val prompt = buildConversationAnalysisPrompt(messages, currentMessage, senderInfo)
@@ -165,7 +201,10 @@ class GeminiAIManager(private val context: Context) {
     private fun getGeminiApiKey(): String {
         // Try to get from BuildConfig first
         try {
-            val apiKey = BuildConfig::class.java.getField("GEMINI_API_KEY").get(null) as? String
+            // Use reflection to check if field exists, to avoid compilation error if it doesn't
+            val buildConfigClass = BuildConfig::class.java
+            val apiKeyField = buildConfigClass.getField("GEMINI_API_KEY")
+            val apiKey = apiKeyField.get(null) as? String
             if (!apiKey.isNullOrBlank()) return apiKey
         } catch (e: Exception) {
             // Field doesn't exist, try other methods
@@ -205,7 +244,7 @@ class GeminiAIManager(private val context: Context) {
     }
     
     private fun buildConversationAnalysisPrompt(
-        messages: List<String>,
+        messages: List<String>,
         currentMessage: String,
         senderInfo: String
     ): String {
@@ -245,29 +284,15 @@ class GeminiAIManager(private val context: Context) {
     
     private fun parseThreatAnalysis(response: String): ThreatAnalysisResult {
         return try {
-            // Simple JSON parsing - in production, use proper JSON parser
-            val isThreat = response.contains("\"isThreat\":true")
-            val threatType = extractJsonValue(response, "threatType") ?: "unknown"
-            val confidence = extractJsonValue(response, "confidence")?.toFloatOrNull() ?: 0f
-            val reason = extractJsonValue(response, "reason") ?: "No detailed reason provided"
-            val guidance = extractJsonValue(response, "guidance") ?: "No specific guidance available"
-            val appContext = extractJsonValue(response, "appContext")
-            
-            ThreatAnalysisResult(
-                isThreat = isThreat,
-                threatType = threatType,
-                confidence = confidence,
-                reason = reason,
-                guidance = guidance,
-                appContext = appContext
-            )
+            val jsonString = extractJson(response)
+            gson.fromJson(jsonString, ThreatAnalysisResult::class.java)
         } catch (e: Exception) {
             ThreatAnalysisResult(
-                isThreat = false,
+                isThreat = response.lowercase().contains("threat") || response.lowercase().contains("suspicious"),
                 threatType = "unknown",
-                confidence = 0f,
-                reason = "Failed to parse analysis",
-                guidance = "Please try again",
+                confidence = 0.5f,
+                reason = "Failed to parse JSON analysis: ${e.localizedMessage}. Raw response: $response",
+                guidance = "Please exercise caution.",
                 appContext = null
             )
         }
@@ -275,66 +300,33 @@ class GeminiAIManager(private val context: Context) {
     
     private fun parseConversationAnalysis(response: String): ConversationAnalysisResult {
         return try {
-            val isSuspicious = response.contains("\"isSuspicious\":true")
-            val threatType = extractJsonValue(response, "threatType")
-            val confidence = extractJsonValue(response, "confidence")?.toFloatOrNull() ?: 0f
-            val analysis = extractJsonValue(response, "analysis") ?: "No analysis available"
-            val recommendedActions = extractJsonArray(response, "recommendedActions")
-            val riskFactors = extractJsonArray(response, "riskFactors")
-            
-            ConversationAnalysisResult(
-                isSuspicious = isSuspicious,
-                threatType = threatType,
-                confidence = confidence,
-                analysis = analysis,
-                recommendedActions = recommendedActions,
-                riskFactors = riskFactors
-            )
+            val jsonString = extractJson(response)
+            gson.fromJson(jsonString, ConversationAnalysisResult::class.java)
         } catch (e: Exception) {
             ConversationAnalysisResult(
-                isSuspicious = false,
+                isSuspicious = response.lowercase().contains("suspicious") || response.lowercase().contains("scam"),
                 threatType = null,
-                confidence = 0f,
-                analysis = "Failed to parse conversation analysis",
+                confidence = 0.5f,
+                analysis = "Failed to parse JSON analysis: ${e.localizedMessage}. Raw response: $response",
                 recommendedActions = emptyList(),
                 riskFactors = emptyList()
             )
         }
     }
-    
-    private fun extractJsonValue(json: String, key: String): String? {
-        val pattern = "\"$key\"\\s*:\\s*\"?([^\"\\n,}]+)\"?".toRegex()
-        val match = pattern.find(json)
-        return match?.groupValues?.get(1)?.trim()
-    }
-    
-    private fun extractJsonArray(json: String, key: String): List<String> {
-        try {
-            val pattern = "\"$key\"\\s*:\\s*\\[(.*?)\\]".toRegex(RegexOption.DOT_MATCHES_ALL)
-            val match = pattern.find(json)
-            val arrayContent = match?.groupValues?.get(1) ?: return emptyList()
-            
-            return arrayContent.split(",").map { it.trim().removeSurrounding("\"") }
-        } catch (e: Exception) {
-            return emptyList()
+
+    private fun extractJson(response: String): String {
+        return if (response.contains("```json")) {
+            response.substringAfter("```json").substringBefore("```").trim()
+        } else if (response.contains("```")) {
+            response.substringAfter("```").substringBefore("```").trim()
+        } else {
+            val start = response.indexOf("{")
+            val end = response.lastIndexOf("}")
+            if (start != -1 && end != -1 && end > start) {
+                response.substring(start, end + 1)
+            } else {
+                response.trim()
+            }
         }
     }
 }
-
-data class ThreatAnalysisResult(
-    val isThreat: Boolean,
-    val threatType: String,
-    val confidence: Float,
-    val reason: String,
-    val guidance: String,
-    val appContext: String?
-)
-
-data class ConversationAnalysisResult(
-    val isSuspicious: Boolean,
-    val threatType: String?,
-    val confidence: Float,
-    val analysis: String,
-    val recommendedActions: List<String>,
-    val riskFactors: List<String>
-)

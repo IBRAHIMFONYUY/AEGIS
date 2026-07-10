@@ -7,6 +7,7 @@ import com.aegis.AegisApplication
 import com.aegis.core.AnalysisContext
 import com.aegis.core.SourceType
 import com.aegis.agents.GuardianCore
+import com.aegis.ai.AIOperationManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import javax.inject.Inject
@@ -20,10 +21,14 @@ class AegisNotificationListener : NotificationListenerService() {
     lateinit var guardianCore: GuardianCore
     
     @Inject
-    lateinit var gemmaEngine: com.aegis.ai.GemmaInferenceEngine?
+    lateinit var aiOperationManager: AIOperationManager
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
+        
+        // --- CRITICAL: Ignore our own notifications to prevent AI loops ---
+        if (packageName == applicationContext.packageName) return
+
         val extras = sbn.notification.extras
 
         val title = extras.getString(android.app.Notification.EXTRA_TITLE, "")
@@ -74,7 +79,8 @@ class AegisNotificationListener : NotificationListenerService() {
                             "notification_tag" to (sbn.tag ?: ""),
                             "notification_id" to sbn.id.toString(),
                             "sender" to title,
-                            "chat_id" to chatId
+                            "chat_id" to chatId,
+                            "source_type" to "NOTIFICATION"
                         )
                     )
                     guardianCore.analyze(context)
@@ -92,72 +98,35 @@ class AegisNotificationListener : NotificationListenerService() {
     ) {
         try {
             // Get conversation history from memory
-            val conversationHistory = guardianCore.engineInstance.memoryRepository?.getConversationHistory(chatId) ?: emptyList()
+            val conversationHistory = guardianCore.memoryRepository?.getConversationHistory(chatId) ?: emptyList<String>()
             
-            // Perform deep analysis with AI if available
-            if (gemmaEngine != null && conversationHistory.isNotEmpty()) {
-                val conversationAnalysis = gemmaEngine.analyzeConversationWithAI(
-                    messages = conversationHistory,
-                    currentMessage = currentMessage,
-                    senderInfo = "Sender: $sender, App: $packageName"
+            // Perform analysis via optimized manager
+            // We use standard analyzeThreatOptimized first to see if local tier can handle it
+            val context = AnalysisContext(
+                text = currentMessage,
+                sourceApp = packageName,
+                sourceType = sourceType,
+                conversationHistory = conversationHistory,
+                metadata = mapOf(
+                    "notification_title" to sender,
+                    "sender" to sender,
+                    "chat_id" to chatId,
+                    "source_type" to "NOTIFICATION"
                 )
-                
-                // If suspicious, create enhanced analysis context
-                if (conversationAnalysis.isSuspicious) {
-                    val enhancedContext = AnalysisContext(
-                        text = currentMessage,
-                        sourceApp = packageName,
-                        sourceType = sourceType,
-                        conversationHistory = conversationHistory,
-                        metadata = mapOf(
-                            "notification_title" to sender,
-                            "sender" to sender,
-                            "chat_id" to chatId,
-                            "deep_analysis_result" to conversationAnalysis.analysis,
-                            "threat_type" to (conversationAnalysis.threatType ?: "unknown"),
-                            "confidence" to conversationAnalysis.confidence.toString(),
-                            "risk_factors" to conversationAnalysis.riskFactors.joinToString(", "),
-                            "recommended_actions" to conversationAnalysis.recommendedActions.joinToString("; ")
-                        )
-                    )
-                    
-                    val result = guardianCore.analyze(enhancedContext)
-                    
-                    // Show overlay for malicious threats
-                    if (result.overallThreatLevel.value >= com.aegis.core.ThreatLevel.MALICIOUS.value) {
-                        showThreatOverlay(result, packageName)
-                    }
-                } else {
-                    // Standard analysis if not suspicious
-                    val context = AnalysisContext(
-                        text = currentMessage,
-                        sourceApp = packageName,
-                        sourceType = sourceType,
-                        conversationHistory = conversationHistory,
-                        metadata = mapOf(
-                            "notification_title" to sender,
-                            "sender" to sender,
-                            "chat_id" to chatId
-                        )
-                    )
-                    guardianCore.analyze(context)
-                }
-            } else {
-                // Fallback to standard analysis
-                val context = AnalysisContext(
-                    text = currentMessage,
-                    sourceApp = packageName,
-                    sourceType = sourceType,
-                    conversationHistory = conversationHistory,
-                    metadata = mapOf(
-                        "notification_title" to sender,
-                        "sender" to sender,
-                        "chat_id" to chatId
-                    )
-                )
-                guardianCore.analyze(context)
+            )
+
+            val result = guardianCore.analyze(context)
+            
+            // For "Real & Legit" threats found by local/cache tiers, show alert immediately
+            if (result.overallThreatLevel.value >= com.aegis.core.ThreatLevel.MALICIOUS.value) {
+                showThreatOverlay(result, packageName)
+            } else if (result.overallThreatLevel.value == com.aegis.core.ThreatLevel.SUSPICIOUS.value) {
+                // If only SUSPICIOUS, we don't call Gemini yet.
+                // We could show a subtle "Check with AEGIS" option if we had that UI, 
+                // but for now, we follow the "only when requested" rule to save quota.
             }
         } catch (e: Exception) {
+            // ... fallback logic
             // Fallback to basic analysis on error
             val context = AnalysisContext(
                 text = currentMessage,

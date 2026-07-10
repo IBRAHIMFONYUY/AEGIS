@@ -3,6 +3,7 @@ package com.aegis.ui.academy
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -211,19 +212,20 @@ private fun WelcomeScreen(
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                )
+                ),
+                shape = AegisCardShape
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         "How it works:",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("• You'll see realistic scam scenarios")
-                    Text("• Decide if it's a scam or legitimate")
-                    Text("• Learn the red flags and explanations")
-                    Text("• Build your digital intuition")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    BulletPoint("You'll see realistic scam scenarios")
+                    BulletPoint("Decide if it's a scam or legitimate")
+                    BulletPoint("Learn the red flags and explanations")
+                    BulletPoint("Build your digital intuition")
                 }
             }
         }
@@ -232,23 +234,24 @@ private fun WelcomeScreen(
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = WarningOrange.copy(alpha = 0.2f)
-                )
+                ),
+                shape = AegisCardShape
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Warning, contentDescription = null, tint = WarningOrange)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Filled.Security, contentDescription = null, tint = WarningOrange)
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             "Cameroon-Specific Scams",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("• MoMo fraud attempts")
-                    Text("• Fake job offers")
-                    Text("• Banking phishing")
-                    Text("• Government impersonation")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    BulletPoint("MoMo fraud attempts")
+                    BulletPoint("Fake job offers")
+                    BulletPoint("Banking phishing")
+                    BulletPoint("Government impersonation")
                 }
             }
         }
@@ -257,14 +260,24 @@ private fun WelcomeScreen(
             Button(
                 onClick = onStart,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
+                shape = AegisButtonShape,
+                contentPadding = PaddingValues(vertical = 16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AegisPrimary, contentColor = Color.Black)
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Start Training", fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+@Composable
+private fun BulletPoint(text: String) {
+    Row(modifier = Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(14.dp), tint = SafeGreen)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -313,15 +326,26 @@ private fun ScenarioCard(
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                )
+                ),
+                shape = AegisCardShape,
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            scenario.icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    scenario.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             scenario.title,
@@ -329,10 +353,11 @@ private fun ScenarioCard(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         scenario.content,
-                        style = MaterialTheme.typography.bodyLarge
+                        style = MaterialTheme.typography.bodyLarge,
+                        lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified // Default
                     )
                 }
             }
@@ -361,13 +386,15 @@ private fun ScenarioCard(
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = WarningOrange
+                                containerColor = WarningOrange,
+                                contentColor = Color.White
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = AegisButtonShape,
+                            contentPadding = PaddingValues(vertical = 12.dp)
                         ) {
-                            Icon(Icons.Filled.Warning, contentDescription = null)
+                            Icon(Icons.Filled.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Yes, it's a SCAM")
+                            Text("SCAM")
                         }
                         Button(
                             onClick = { 
@@ -379,13 +406,15 @@ private fun ScenarioCard(
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = SafeGreen
+                                containerColor = SafeGreen,
+                                contentColor = Color.White
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = AegisButtonShape,
+                            contentPadding = PaddingValues(vertical = 12.dp)
                         ) {
-                            Icon(Icons.Filled.CheckCircle, contentDescription = null)
+                            Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("No, it's SAFE")
+                            Text("SAFE")
                         }
                     }
                 }
@@ -396,16 +425,17 @@ private fun ScenarioCard(
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = resultColor.copy(alpha = 0.1f)
-                    )
+                    ),
+                    shape = AegisCardShape
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(20.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 if (lastAnswerCorrect == true) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
                                 contentDescription = null,
                                 tint = resultColor
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 if (lastAnswerCorrect == true) "Correct!" else "Incorrect",
                                 style = MaterialTheme.typography.titleMedium,
@@ -418,16 +448,18 @@ private fun ScenarioCard(
                             scenario.explanation,
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             "Red Flags:",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
                         scenario.redFlags.forEach { flag ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                                Icon(Icons.Filled.Circle, null, modifier = Modifier.size(6.dp), tint = resultColor)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("• $flag", style = MaterialTheme.typography.bodySmall)
+                                Text(flag, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -438,9 +470,11 @@ private fun ScenarioCard(
                 Button(
                     onClick = onNext,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = AegisButtonShape,
+                    contentPadding = PaddingValues(vertical = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AegisPrimary, contentColor = Color.Black)
                 ) {
-                    Text(if (step < total) "Next Scenario" else "See Results")
+                    Text(if (step < total) "Next Scenario" else "See Results", fontWeight = FontWeight.Bold)
                 }
             }
         }

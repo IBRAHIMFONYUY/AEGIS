@@ -1,7 +1,7 @@
 package com.aegis
 
 import android.app.Application
-import android.util.Log
+import timber.log.Timber
 import com.aegis.agents.GuardianCore
 import com.aegis.core.ThreatLevel
 import com.aegis.data.db.entity.SafetyScore
@@ -51,10 +51,14 @@ class AegisApplication : Application() {
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+
         try {
             System.loadLibrary("sqlcipher")
         } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "Failed to load sqlcipher library", e)
+            Timber.tag(TAG).e(e, "Failed to load sqlcipher library")
         }
 
         super.onCreate()
@@ -109,10 +113,9 @@ class AegisApplication : Application() {
                     )
 
                 }.onFailure { exception ->
-                    Log.e(
-                        TAG,
-                        "Failed processing Guardian analysis result.",
-                        exception
+                    Timber.tag(TAG).e(
+                        exception,
+                        "Failed processing Guardian analysis result."
                     )
                 }
             }

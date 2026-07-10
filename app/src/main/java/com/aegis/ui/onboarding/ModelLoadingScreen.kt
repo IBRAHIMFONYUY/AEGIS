@@ -133,7 +133,7 @@ fun ModelLoadingScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = AegisCardShape,
                 colors = CardDefaults.cardColors(
                     containerColor = Color(0xFF1A1D24).copy(alpha = 0.8f)
                 ),
@@ -169,7 +169,7 @@ fun ModelLoadingScreen(
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = CyberBlue
                                 ),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = AegisButtonShape
                             ) {
                                 Icon(Icons.Filled.Refresh, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))

@@ -3,7 +3,7 @@ package com.aegis.services.overlay
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
-import android.util.Log
+import timber.log.Timber
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -49,7 +49,7 @@ class ThreatOverlayManager(private val context: Context) {
 
         // Check for overlay permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(context)) {
-            Log.w("ThreatOverlayManager", "Cannot show overlay: SYSTEM_ALERT_WINDOW permission not granted")
+            Timber.tag("ThreatOverlayManager").w("Cannot show overlay: SYSTEM_ALERT_WINDOW permission not granted")
             return
         }
 
@@ -99,7 +99,7 @@ class ThreatOverlayManager(private val context: Context) {
                 delay(duration)
                 hideOverlay()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.tag("ThreatOverlayManager").e(e, "Error adding overlay view")
             }
         }
     }
@@ -172,6 +172,7 @@ fun ThreatAlertUI(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
+                    val sender = result.context.metadata["sender"] ?: "Unknown Sender"
                     Text(
                         text = "AEGIS GUARDIAN: ${level.label.uppercase()}",
                         style = MaterialTheme.typography.labelSmall,
@@ -180,9 +181,10 @@ fun ThreatAlertUI(
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Suspicious activity in ${result.context.sourceApp?.split('.')?.lastOrNull() ?: "Current App"}",
+                        text = "Alert from $sender",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 IconButton(onClick = onDismiss) {
@@ -220,12 +222,17 @@ fun ThreatAlertUI(
             Spacer(modifier = Modifier.height(8.dp))
             
             if (threatMessage.isNotBlank() && threatMessage != "No message content") {
-                Text(
-                    text = "Content:",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontWeight = FontWeight.Bold
-                )
+                val timeFormat = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                val timeStr = timeFormat.format(java.util.Date(result.timestamp))
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Content ($timeStr):",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     text = threatMessage.take(150) + if (threatMessage.length > 150) "..." else "",
                     style = MaterialTheme.typography.bodySmall,

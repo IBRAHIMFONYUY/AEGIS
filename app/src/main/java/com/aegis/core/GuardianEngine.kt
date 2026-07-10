@@ -21,12 +21,7 @@ class GuardianEngine(
             .filter { it.isAvailable() }
             .map { agent ->
                 try {
-                    // Use real inference for ScamAgent if Gemma is available
-                    if (agent is ScamAgent && gemmaEngine != null) {
-                        agent.analyzeWithRealInference(context, memory, gemmaEngine)
-                    } else {
-                        agent.analyze(context, memory, emptyList())
-                    }
+                    agent.analyze(context, memory, emptyList())
                 } catch (e: Exception) {
                     AgentResult(
                         agentName = agent.name,
@@ -40,10 +35,17 @@ class GuardianEngine(
         val overallThreat = computeOverallThreat(fastResults)
         val finalResults = fastResults.toMutableList()
 
-        // Step 2: Run deep reasoning (Coach) for comprehensive AI analysis
-        // We run it if overall threat is at least SUSPICIOUS, or if explicitly requested for accuracy
-        if ((overallThreat.value >= ThreatLevel.SUSPICIOUS.value || context.metadata.containsKey("deep_scan")) 
-            && coachAgent?.isAvailable() == true) {
+        // Step 2: Run deep reasoning (Coach) ONLY if explicitly triggered or for extremely dangerous threats
+        // --- QUOTA FIX: NEVER run AI automatically in background ---
+        val isExplicitTrigger = context.metadata.containsKey("deep_scan") || 
+                               context.metadata.containsKey("force_ai_analysis") ||
+                               context.metadata["source_type"] == "CHATBOT"
+        
+        // Only run coach in background if it's CRITICAL (life safety) and even then, only if allowed
+        val isExtremelyCritical = overallThreat == ThreatLevel.CRITICAL && 
+                                 context.metadata["source_type"] != "NOTIFICATION"
+
+        if ((isExplicitTrigger || isExtremelyCritical) && coachAgent?.isAvailable() == true) {
             try {
                 val coachResult = coachAgent.analyze(context, memory, fastResults)
                 finalResults.add(coachResult)
@@ -63,13 +65,29 @@ class GuardianEngine(
 
     private fun computeOverallThreat(results: List<AgentResult>): ThreatLevel {
         if (results.isEmpty()) return ThreatLevel.SAFE
-        val maxThreat = results.maxByOrNull { it.threatLevel.value }?.threatLevel ?: ThreatLevel.SAFE
-        val highConfidenceThreats = results.filter {
-            it.confidence >= 0.7f && it.threatLevel.value >= ThreatLevel.MALICIOUS.value
+        
+        // Filter for "Real & Legit" threats: Must have high confidence (>0.6) 
+        // to be considered for more than just SUSPICIOUS.
+        val validResults = results.filter { it.confidence >= 0.6f }
+        
+        if (validResults.isEmpty()) {
+            // Check if there are any results at all, even low confidence
+            val maxRawThreat = results.maxByOrNull { it.threatLevel.value }?.threatLevel ?: ThreatLevel.SAFE
+            return if (maxRawThreat.value >= ThreatLevel.MALICIOUS.value) {
+                // Downgrade low-confidence malicious hits to SUSPICIOUS (Context not strong enough)
+                ThreatLevel.SUSPICIOUS
+            } else {
+                ThreatLevel.SAFE
+            }
         }
+
+        val maxThreat = validResults.maxByOrNull { it.threatLevel.value }?.threatLevel ?: ThreatLevel.SAFE
+        val criticalConfidenceThreats = validResults.filter {
+            it.confidence >= 0.85f && it.threatLevel.value >= ThreatLevel.MALICIOUS.value
+        }
+
         return when {
-            highConfidenceThreats.size >= 2 -> ThreatLevel.CRITICAL
-            maxThreat == ThreatLevel.CRITICAL -> ThreatLevel.CRITICAL
+            criticalConfidenceThreats.isNotEmpty() -> ThreatLevel.CRITICAL
             maxThreat == ThreatLevel.MALICIOUS -> ThreatLevel.MALICIOUS
             maxThreat == ThreatLevel.LIKELY_MALICIOUS -> ThreatLevel.LIKELY_MALICIOUS
             maxThreat == ThreatLevel.SUSPICIOUS -> ThreatLevel.SUSPICIOUS

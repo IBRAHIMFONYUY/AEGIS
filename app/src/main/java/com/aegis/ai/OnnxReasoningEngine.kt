@@ -17,7 +17,11 @@ class OnnxReasoningEngine(
     private val environment = OrtEnvironment.getEnvironment()
     private val modelType = "llm_reasoning"
 
-    override suspend fun generateResponse(prompt: String, contextStr: String?): String = withContext(Dispatchers.IO) {
+    override suspend fun generateResponse(
+        prompt: String, 
+        contextStr: String?, 
+        metadata: Map<String, String>
+    ): String = withContext(Dispatchers.IO) {
         if (!isModelLoaded()) {
             if (!loadModel()) return@withContext "Guardian Reasoning Engine is initializing. Please try again in a moment."
         }
@@ -71,7 +75,8 @@ class OnnxReasoningEngine(
         return "Deep AI Analysis: Based on the provided signals, I have evaluated this interaction as potentially manipulative. I recommend verifying the source independently before proceeding with any financial requests."
     }
     override suspend fun summarizeConversation(
-        history: List<String>
+        history: List<String>,
+        metadata: Map<String, String>
     ): String = withContext(Dispatchers.IO) {
 
         val prompt = """
@@ -91,11 +96,12 @@ class OnnxReasoningEngine(
     """.trimIndent()
 
 
-        generateResponse(prompt)
+        generateResponse(prompt, null, metadata)
     }
     override suspend fun analyzeConversation(
         history: List<String>,
-        currentMessage: String
+        currentMessage: String,
+        metadata: Map<String, String>
     ): String = withContext(Dispatchers.IO) {
 
 
@@ -132,6 +138,6 @@ class OnnxReasoningEngine(
     """.trimIndent()
 
 
-        generateResponse(prompt)
+        generateResponse(prompt, null, metadata)
     }
 }

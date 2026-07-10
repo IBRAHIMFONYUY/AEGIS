@@ -17,7 +17,7 @@ class TFLiteInference(
 
     private val interpreters = mutableMapOf<String, Interpreter>()
 
-    override suspend fun classify(text: String, modelType: String): Float =
+    override suspend fun classify(text: String, modelType: String, metadata: Map<String, String>): Float =
         withContext(Dispatchers.IO) {
             try {
                 val interpreter = getOrCreateInterpreter(modelType) ?: return@withContext 0f
@@ -30,7 +30,7 @@ class TFLiteInference(
             }
         }
 
-    override suspend fun analyzeText(text: String, modelType: String): Map<String, Float> =
+    override suspend fun analyzeText(text: String, modelType: String, metadata: Map<String, String>): Map<String, Float> =
         withContext(Dispatchers.IO) {
             try {
                 val interpreter = getOrCreateInterpreter(modelType) ?: return@withContext emptyMap()

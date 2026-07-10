@@ -64,16 +64,24 @@ class MisinformationAgent(
         val emotionalScore = emotionalManipulationPatterns.count { it.containsMatchIn(text) } * 0.15f
 
         val hasAuthoritySource = authorityMatches > 0
-        val mlScore = inferenceEngine?.classify(text, "misinformation") ?: 0f
-
-        // Increased weight for AI/ML analysis (0.7 vs 0.3)
-        val combinedScore = if (hasAuthoritySource) {
-            (signalScore * 0.2f + emotionalScore * 0.1f + mlScore * 0.7f - 0.2f).coerceIn(0f, 1f)
+        val mlScore = if (context.precomputedAiResult != null) {
+            if (context.precomputedAiResult.threatType == "fake_news") context.precomputedAiResult.confidence else 0.1f
         } else {
-            (signalScore * 0.2f + emotionalScore * 0.1f + mlScore * 0.7f).coerceIn(0f, 1f)
+            inferenceEngine?.classify(text, "misinformation", context.metadata) ?: 0f
+        }
+
+        // Increased weight for AI/ML analysis (0.8 vs 0.2)
+        // If it's just "breaking news" keywords but ML says it's fine, we ignore it.
+        val combinedScore = if (hasAuthoritySource) {
+            (signalScore * 0.1f + mlScore * 0.9f - 0.2f).coerceIn(0f, 1f)
+        } else {
+            (signalScore * 0.15f + mlScore * 0.85f).coerceIn(0f, 1f)
         }
 
         val threatLevel = scoreToThreatLevel(combinedScore)
+        
+        // Final "Legit" filter: Must cross 0.45 combined score to be shown
+        if (combinedScore < 0.45f) return safeResult
 
         return AgentResult(
             agentName = name,

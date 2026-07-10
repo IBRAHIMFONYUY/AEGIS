@@ -20,8 +20,13 @@ class GuardianCoachAgent(
         previousResults: List<AgentResult>
     ): AgentResult =
         withContext(Dispatchers.Default) {
-            val prompt = buildExplanationPrompt(context, previousResults)
-            val explanation = reasoningEngine?.generateResponse(prompt) ?: "I am performing a deep AI analysis of this interaction."
+            // --- QUOTA PROTECTION: Use precomputed AI reason if available ---
+            val explanation = if (context.precomputedAiResult != null) {
+                context.precomputedAiResult.reason
+            } else {
+                val prompt = buildExplanationPrompt(context, previousResults)
+                reasoningEngine?.generateResponse(prompt, null, context.metadata) ?: "I am performing a deep AI analysis of this interaction."
+            }
 
             AgentResult(
                 agentName = name,
@@ -45,8 +50,18 @@ class GuardianCoachAgent(
             "\nHistorical Summary of this Contact:\n$it"
         } ?: ""
 
+        val isCyberbullying = previousResults.any { it.agentName == "CyberbullyingAgent" && it.threatLevel.value >= ThreatLevel.MALICIOUS.value }
+
+        val personaPrompt = if (isCyberbullying) {
+            "You are AEGIS Cyber-Safety Coach. You are speaking to someone who might be experiencing online harassment or bullying. Be extremely empathetic, supportive, and calm. Do not judge. Focus on their well-being and provide clear steps for safety and emotional support."
+        } else {
+            "You are AEGIS Security Coach. Provide a concise, human-friendly, educational explanation of the detected security risks."
+        }
+
         return """
-            Analyze the following mobile interaction for security risks:
+            $personaPrompt
+            
+            Context Analysis:
             Text: ${context.text ?: "N/A"}
             Source App: ${context.sourceApp ?: "Unknown"}
             Source Type: ${context.sourceType}
@@ -57,10 +72,11 @@ class GuardianCoachAgent(
             Detected Threats:
             $threatReport
             
-            Provide a concise, human-friendly, educational explanation.
-            If there is chat history, use it to explain WHY the current message is suspicious compared to previous ones.
-            Example: "Based on your previous chat with this person, this new message is unusually urgent."
-            Provide clear, actionable advice.
+            Goal:
+            - Explain WHY this is risky in plain language.
+            - If it's cyberbullying, offer emotional validation first.
+            - Provide 3 clear, actionable safety steps.
+            - If there is chat history, use it to explain WHY the current message is suspicious compared to previous ones.
         """.trimIndent()
     }
 

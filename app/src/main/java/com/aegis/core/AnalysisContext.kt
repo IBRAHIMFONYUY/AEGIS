@@ -11,7 +11,8 @@ data class AnalysisContext(
     val isUnknownSender: Boolean = false,
     val conversationHistory: List<String> = emptyList(),
     val metadata: Map<String, String> = emptyMap(),
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val precomputedAiResult: com.aegis.ai.ThreatAnalysisResult? = null
 )
 
 enum class SourceType {

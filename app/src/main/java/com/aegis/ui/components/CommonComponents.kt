@@ -35,23 +35,29 @@ fun ThreatLevelIndicator(
         ThreatLevel.CRITICAL -> Icons.Filled.Dangerous
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        color = color.copy(alpha = 0.15f),
+        shape = AegisPillShape,
         modifier = modifier
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = threatLevel.label,
-            tint = color,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = threatLevel.label,
-            color = color,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = threatLevel.label,
+                tint = color,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = threatLevel.label,
+                color = color,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
 
@@ -106,18 +112,20 @@ fun AgentStatusCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = CardDark
+        ),
+        shape = AegisCardShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(10.dp)
+                    .size(12.dp)
                     .clip(CircleShape)
                     .background(if (isActive) SafeGreen else Color.Gray)
             )
@@ -126,19 +134,20 @@ fun AgentStatusCard(
                 Text(
                     text = name,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = OnSurfaceDim
                 )
             }
             Icon(
                 imageVector = if (isActive) Icons.Filled.CheckCircle else Icons.Filled.RemoveCircle,
                 contentDescription = null,
                 tint = if (isActive) SafeGreen else Color.Gray,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
     }
@@ -170,14 +179,15 @@ fun FeatureCard(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = CardDark
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = AegisCardShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             icon()
@@ -186,18 +196,19 @@ fun FeatureCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = OnSurfaceDim
                 )
             }
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                tint = OnSurfaceDim
             )
         }
     }
@@ -249,10 +260,11 @@ fun DashboardSOC(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        shape = AegisCardShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -262,17 +274,17 @@ fun DashboardSOC(
                     text = "Guardian Intelligence Status",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = AegisPrimary
                 )
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(10.dp)
                         .clip(CircleShape)
                         .background(SafeGreen)
                 )
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 SOCItem(label = "AI Models", value = "${guardianCore.availableAgentCount} Active", icon = Icons.Filled.Memory)
@@ -286,11 +298,11 @@ fun DashboardSOC(
 @Composable
 private fun SOCItem(label: String, value: String, icon: ImageVector) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-        Spacer(modifier = Modifier.width(4.dp))
+        Icon(icon, null, modifier = Modifier.size(16.dp), tint = AegisPrimary)
+        Spacer(modifier = Modifier.width(6.dp))
         Column {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-            Text(value, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = OnSurfaceDim)
+            Text(value, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
         }
     }
 }

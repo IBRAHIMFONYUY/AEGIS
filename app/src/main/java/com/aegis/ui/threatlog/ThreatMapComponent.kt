@@ -107,7 +107,7 @@ fun ThreatMapComponent(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(350.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = AegisCardShape,
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0E14))
     ) {
@@ -184,7 +184,7 @@ fun ThreatMapComponent(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(16.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(AegisButtonShape)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .padding(12.dp)
             ) {
@@ -338,7 +338,7 @@ private fun ThreatDetailCard(
         modifier = modifier
             .padding(16.dp)
             .width(280.dp),
-        shape = RoundedCornerShape(12.dp),
+        shape = AegisCardShape,
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF1A1D24)
         ),

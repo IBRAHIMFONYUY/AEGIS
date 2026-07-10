@@ -10,20 +10,20 @@ class CompositeInferenceEngine(
     private val onnxEngine = OnnxInference(context, modelManager)
     private val tfliteEngine = TFLiteInference(context, modelManager)
 
-    override suspend fun classify(text: String, modelType: String): Float {
+    override suspend fun classify(text: String, modelType: String, metadata: Map<String, String>): Float {
         val config = modelManager.getModelConfig(modelType) ?: return 0f
         return when (config.engineType) {
-            ModelType.ONNX -> onnxEngine.classify(text, modelType)
-            ModelType.TFLITE -> tfliteEngine.classify(text, modelType)
+            ModelType.ONNX -> onnxEngine.classify(text, modelType, metadata)
+            ModelType.TFLITE -> tfliteEngine.classify(text, modelType, metadata)
             ModelType.MLKIT -> 0f
         }
     }
 
-    override suspend fun analyzeText(text: String, modelType: String): Map<String, Float> {
+    override suspend fun analyzeText(text: String, modelType: String, metadata: Map<String, String>): Map<String, Float> {
         val config = modelManager.getModelConfig(modelType) ?: return emptyMap()
         return when (config.engineType) {
-            ModelType.ONNX -> onnxEngine.analyzeText(text, modelType)
-            ModelType.TFLITE -> tfliteEngine.analyzeText(text, modelType)
+            ModelType.ONNX -> onnxEngine.analyzeText(text, modelType, metadata)
+            ModelType.TFLITE -> tfliteEngine.analyzeText(text, modelType, metadata)
             ModelType.MLKIT -> emptyMap()
         }
     }

@@ -15,7 +15,8 @@ interface ReasoningEngine {
      */
     suspend fun generateResponse(
         prompt: String,
-        context: String? = null
+        context: String? = null,
+        metadata: Map<String, String> = emptyMap()
     ): String
 
     /**
@@ -46,10 +47,9 @@ interface ReasoningEngine {
     fun getModelInfo(): ModelInfo
 
     suspend fun summarizeConversation(
-        history: List<String>
+        history: List<String>,
+        metadata: Map<String, String> = emptyMap()
     ): String
-
-
 
     /**
      * Analyze a conversation for:
@@ -60,7 +60,8 @@ interface ReasoningEngine {
      */
     suspend fun analyzeConversation(
         history: List<String>,
-        currentMessage: String
+        currentMessage: String,
+        metadata: Map<String, String> = emptyMap()
     ): String
 
     /**

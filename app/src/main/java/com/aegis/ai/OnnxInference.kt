@@ -15,7 +15,7 @@ class OnnxInference(
     private val sessions = mutableMapOf<String, OrtSession>()
     private val environment = OrtEnvironment.getEnvironment()
 
-    override suspend fun classify(text: String, modelType: String): Float =
+    override suspend fun classify(text: String, modelType: String, metadata: Map<String, String>): Float =
         withContext(Dispatchers.IO) {
             try {
                 val session = getOrCreateSession(modelType) ?: return@withContext 0f
@@ -27,9 +27,13 @@ class OnnxInference(
             }
         }
 
-    override suspend fun analyzeText(text: String, modelType: String): Map<String, Float> =
+    override suspend fun analyzeText(text: String, modelType: String, metadata: Map<String, String>): Map<String, Float> =
         withContext(Dispatchers.IO) {
-            emptyMap()
+            val score = classify(text, modelType, metadata)
+            mapOf(
+                "score" to score,
+                "confidence" to if (score > 0) 0.8f else 0f
+            )
         }
 
     override suspend fun isModelLoaded(modelType: String): Boolean =

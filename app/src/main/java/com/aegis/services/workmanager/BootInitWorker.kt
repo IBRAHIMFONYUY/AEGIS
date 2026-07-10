@@ -3,6 +3,7 @@ package com.aegis.services.workmanager
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import timber.log.Timber
 import com.aegis.services.foreground.AegisForegroundService
 
 class BootInitWorker(
@@ -23,7 +24,7 @@ class BootInitWorker(
             }
             Result.success()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "BootInitWorker failed to start service")
             Result.retry()
         }
     }

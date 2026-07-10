@@ -48,6 +48,26 @@ class PrivacyViewModel @Inject constructor(
         }
     }
 
+    private val _privacyReport = MutableStateFlow<String?>(null)
+    val privacyReport = _privacyReport.asStateFlow()
+
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning = _isScanning.asStateFlow()
+
+    fun generatePrivacyReport() {
+        viewModelScope.launch {
+            _isScanning.value = true
+            val context = com.aegis.core.AnalysisContext(
+                text = "Requesting comprehensive privacy audit",
+                sourceType = com.aegis.core.SourceType.SCREEN,
+                metadata = mapOf("request_privacy_report" to "true")
+            )
+            val result = guardianCore.analyze(context)
+            _privacyReport.value = result.agentResults.find { it.agentName == "PrivacyAdvisor" }?.suggestedAction
+            _isScanning.value = false
+        }
+    }
+
     fun runDeepScan() {
         viewModelScope.launch {
             val context = com.aegis.core.AnalysisContext(

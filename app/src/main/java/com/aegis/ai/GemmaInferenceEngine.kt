@@ -1,16 +1,21 @@
 package com.aegis.ai
 
 import android.content.Context
-import android.util.Log
 import com.aegis.ai.runtime.LLMRuntime
 import com.aegis.ai.sampling.SamplingParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
@@ -18,66 +23,87 @@ class GemmaInferenceEngine(
     private val context: Context
 ) : InferenceEngine, ReasoningEngine {
 
+    private val TAG = "AegisIntelligenceEngine"
 
-    private val TAG = "GemmaInferenceEngine"
-
-    private val gemmaManager =
-        GemmaModelManager(context)
-    
+    private val gemmaManager = GemmaModelManager(context)
     private val geminiAIManager = GeminiAIManager(context)
-    
-    private val _useOnlineMode = MutableStateFlow(false)
+
+    private val _useOnlineMode = MutableStateFlow(true) // Default to true for MVP
     val useOnlineMode: StateFlow<Boolean> = _useOnlineMode.asStateFlow()
 
+    private val _isGeminiReady = MutableStateFlow(false)
+    val isGeminiReady: StateFlow<Boolean> = _isGeminiReady.asStateFlow()
+
+    private val engineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    val isEngineReady: StateFlow<Boolean> = combine(
+        gemmaManager.isModelLoaded,
+        _isGeminiReady
+    ) { local, online -> local || online }
+        .stateIn(
+            scope = engineScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
 
     val isModelLoadedFlow: StateFlow<Boolean>
         get() = gemmaManager.isModelLoaded
 
-
     val isLoading: StateFlow<Boolean>
         get() = gemmaManager.isLoading
-
 
     val loadProgress: StateFlow<Float>
         get() = gemmaManager.loadProgress
 
-
     val errorMessage: StateFlow<String?>
         get() = gemmaManager.errorMessage
 
-
+    fun setPrivacyMode(enabled: Boolean) {
+        _useOnlineMode.value = !enabled
+    }
 
     override suspend fun generateResponse(
         prompt: String,
-        context: String?
+        context: String?,
+        metadata: Map<String, String>
     ): String {
+        val sourceType = metadata["source_type"] ?: "UNKNOWN"
+        val isChatbot = sourceType == "CHATBOT"
+        val isNotification = sourceType == "NOTIFICATION"
+        
+        // Force Cloud AI if metadata indicates a high-priority user request (like Chatbot)
+        val forceAI = metadata["force_ai_analysis"] == "true" || isChatbot
+        
+        // --- CRITICAL QUOTA FIX: NEVER hit Cloud AI for background notifications ---
+        val canUseCloud = (_useOnlineMode.value && !isNotification) || forceAI
 
-
-        if (!ensureReady()) {
-            // Fallback to Gemini API if local model is not available
-            return generateResponseWithGemini(prompt, context)
+        // 1. Try Gemini first if explicitly allowed/forced
+        if (canUseCloud) {
+            if (!_isGeminiReady.value) {
+                _isGeminiReady.value = geminiAIManager.initialize()
+            }
+            if (_isGeminiReady.value) {
+                return generateResponseWithGemini(prompt, context)
+            }
         }
 
-
-        val formattedPrompt =
-            formatPrompt(prompt, context)
-
-
-
-        return when(
-            val result =
-                gemmaManager.generate(formattedPrompt)
-        ){
-
-            is GenerationResult.Text ->
-                result.text
-
-
-            is GenerationResult.Blocked ->
-                "[Blocked] ${result.reason}"
+        // 2. Fallback/Privacy Mode: Try local Gemma
+        if (gemmaManager.isModelLoaded.value) {
+            val formattedPrompt = formatPrompt(prompt, context)
+            return when (val result = gemmaManager.generate(formattedPrompt)) {
+                is GenerationResult.Text -> result.text
+                is GenerationResult.Blocked -> "[Blocked] ${result.reason}"
+            }
         }
+
+        // 3. Last resort: Return status message
+        if (isChatbot) {
+            return "Gemini is currently unavailable. Please check your internet connection or enable Privacy Mode after downloading the local model."
+        }
+
+        return "Local AI model not loaded. AEGIS is protecting you using real-time security rules."
     }
-    
+
     private suspend fun generateResponseWithGemini(prompt: String, context: String?): String {
         return try {
             val fullContext = if (!context.isNullOrBlank()) {
@@ -97,17 +123,34 @@ class GemmaInferenceEngine(
     override fun generateResponseStream(
         prompt: String,
         context: String?
-    ): Flow<String> {
+    ): Flow<String> = flow {
+        if (!ensureReady()) {
+            emitAll(generateResponseStreamWithGemini(prompt, context))
+            return@flow
+        }
 
+        // Same routing fix as generateResponse(): ensureReady()==true can mean "Gemini is
+        // ready" rather than "local model is ready", so check explicitly before streaming
+        // from the local engine.
+        if (!gemmaManager.isModelLoaded.value) {
+            emitAll(generateResponseStreamWithGemini(prompt, context))
+            return@flow
+        }
 
-        val formattedPrompt =
-            formatPrompt(prompt, context)
+        val formattedPrompt = formatPrompt(prompt, context)
 
+        try {
+            gemmaManager.generateStream(formattedPrompt).collect { chunk ->
+                emit(chunk)
+            }
+        } catch (e: Exception) {
+            emitAll(generateResponseStreamWithGemini(prompt, context))
+        }
+    }.flowOn(Dispatchers.Default)
 
-
-        return gemmaManager
-            .generateStream(formattedPrompt)
-
+    private fun generateResponseStreamWithGemini(prompt: String, context: String?): Flow<String> {
+        val fullContext = if (!context.isNullOrBlank()) "Context:\n$context\n\n" else ""
+        return geminiAIManager.generateResponseStream("$fullContext$prompt")
     }
 
 
@@ -146,30 +189,27 @@ class GemmaInferenceEngine(
 
 
 
-    override suspend fun ensureReady():Boolean {
-
-
-        if(gemmaManager.isModelLoaded.value)
-            return true
-        
-        // Try to initialize local model
-        val localModelLoaded = loadModel()
-        
-        // If local model fails, initialize Gemini as fallback
-        if (!localModelLoaded) {
-            _useOnlineMode.value = true
-            return geminiAIManager.initialize()
+    override suspend fun ensureReady(): Boolean {
+        // Try Gemini first as it's the primary engine now
+        if (_useOnlineMode.value) {
+            if (_isGeminiReady.value) return true
+            _isGeminiReady.value = geminiAIManager.initialize()
+            if (_isGeminiReady.value) return true
         }
-        
-        return true
+
+        // Fallback to local
+        if (gemmaManager.isModelLoaded.value) return true
+
+        // Only try to auto-load local if we aren't in online mode or if online failed
+        if (gemmaManager.isModelInstalled()) {
+            return gemmaManager.initializeEngine()
+        }
+
+        return false
     }
 
-
-
-    override suspend fun isModelLoaded():Boolean {
-
-        return gemmaManager.isModelLoaded.value
-
+    override suspend fun isModelLoaded(): Boolean {
+        return _isGeminiReady.value || gemmaManager.isModelLoaded.value
     }
 
 
@@ -196,9 +236,17 @@ class GemmaInferenceEngine(
 
     override suspend fun classify(
         text:String,
-        modelType:String
+        modelType:String,
+        metadata: Map<String, String>
     ):Float {
-
+        val sourceType = metadata["source_type"] ?: "UNKNOWN"
+        val isBackground = sourceType == "NOTIFICATION" || sourceType == "UNKNOWN"
+        val forceAI = metadata["force_ai_analysis"] == "true"
+        
+        // --- QUOTA PROTECTION: Strictly block cloud for automated classification ---
+        if (isBackground && !forceAI) {
+            return 0.1f // Default safe score
+        }
 
         val prompt =
             """
@@ -213,7 +261,7 @@ class GemmaInferenceEngine(
 
 
         val result =
-            generateResponse(prompt)
+            generateResponse(prompt, null, metadata)
 
 
 
@@ -231,12 +279,13 @@ class GemmaInferenceEngine(
 
     override suspend fun analyzeText(
         text:String,
-        modelType:String
+        modelType:String,
+        metadata: Map<String, String>
     ):Map<String,Float>{
 
 
         val score =
-            classify(text,modelType)
+            classify(text, modelType, metadata)
 
 
         return mapOf(
@@ -274,36 +323,62 @@ class GemmaInferenceEngine(
         text:String,
         metadata:Map<String,String>
     ):Float {
-        // Try local model first
+        // 1. Try local model first
         if (gemmaManager.isModelLoaded.value) {
-            return classify(text, "scam")
+            return classify(text, "scam", metadata)
         }
+
+        // 2. Only fallback to Gemini if NOT a background notification
+        val sourceType = metadata["source_type"] ?: "UNKNOWN"
+        val isNotification = sourceType == "NOTIFICATION"
+        val forceAI = metadata["force_ai_analysis"] == "true"
         
-        // Fallback to Gemini for scam detection
-        val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
-        val result = geminiAIManager.analyzeThreat(text, context)
-        return if (result.isThreat && result.threatType == "scam") {
-            result.confidence
-        } else {
-            0f
+        if ((_useOnlineMode.value && !isNotification) || forceAI) {
+            val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+            val result = geminiAIManager.analyzeThreat(text, context)
+            return if (result.isThreat && result.threatType == "scam") {
+                result.confidence
+            } else {
+                0f
+            }
         }
+
+        // If cloud is restricted, return 0 (let local rules handle it)
+        return 0f
     }
-    
+
     suspend fun detectThreatWithAI(
         text: String,
         metadata: Map<String, String>
     ): ThreatAnalysisResult {
-        // Use Gemini for comprehensive threat analysis
-        val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
-        return geminiAIManager.analyzeThreat(text, context)
+        // Only use Gemini if not a background notification
+        val sourceType = metadata["source_type"] ?: "UNKNOWN"
+        val isNotification = sourceType == "NOTIFICATION"
+        val forceAI = metadata["force_ai_analysis"] == "true"
+
+        if ((_useOnlineMode.value && !isNotification) || forceAI) {
+            val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+            return geminiAIManager.analyzeThreat(text, context)
+        }
+        
+        return ThreatAnalysisResult(false, "none", 0f, "Cloud restricted for background tasks", "No action", null)
     }
-    
+
     suspend fun analyzeConversationWithAI(
         messages: List<String>,
         currentMessage: String,
-        senderInfo: String = ""
+        senderInfo: String = "",
+        metadata: Map<String, String> = emptyMap()
     ): ConversationAnalysisResult {
-        return geminiAIManager.analyzeConversationHistory(messages, currentMessage, senderInfo)
+        val sourceType = metadata["source_type"] ?: "UNKNOWN"
+        val isNotification = sourceType == "NOTIFICATION"
+        val forceAI = metadata["force_ai_analysis"] == "true"
+
+        if ((_useOnlineMode.value && !isNotification) || forceAI) {
+            return geminiAIManager.analyzeConversationHistory(messages, currentMessage, senderInfo)
+        }
+
+        return ConversationAnalysisResult(false, null, 0f, "Cloud restricted for background tasks", emptyList(), emptyList())
     }
 
 
@@ -342,7 +417,8 @@ class GemmaInferenceEngine(
     fun installModel():Flow<DownloadStatus> =
         gemmaManager.installModel()
 
-
+    fun importModel(uri: android.net.Uri): Boolean =
+        gemmaManager.importModel(uri)
 
     fun unloadModel(){
 
@@ -360,7 +436,8 @@ class GemmaInferenceEngine(
 
 
     override suspend fun summarizeConversation(
-        history: List<String>
+        history: List<String>,
+        metadata: Map<String, String>
     ): String {
 
         val prompt = """
@@ -380,14 +457,15 @@ class GemmaInferenceEngine(
     """.trimIndent()
 
 
-        return generateResponse(prompt)
+        return generateResponse(prompt, null, metadata)
     }
 
 
 
     override suspend fun analyzeConversation(
         history: List<String>,
-        currentMessage: String
+        currentMessage: String,
+        metadata: Map<String, String>
     ): String {
 
         val prompt = """
@@ -412,7 +490,7 @@ class GemmaInferenceEngine(
     """.trimIndent()
 
 
-        return generateResponse(prompt)
+        return generateResponse(prompt, null, metadata)
     }
 
 }

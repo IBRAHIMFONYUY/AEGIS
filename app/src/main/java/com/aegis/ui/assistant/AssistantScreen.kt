@@ -1,5 +1,7 @@
 package com.aegis.ui.assistant
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +15,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,9 +37,16 @@ fun AssistantScreen(
     val loadProgress by viewModel.loadProgress.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val installError by viewModel.installError.collectAsState()
+    val isOnlineMode by viewModel.isOnlineMode.collectAsState()
 
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importModel(it) }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -46,7 +57,40 @@ fun AssistantScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Assistant", fontWeight = FontWeight.Bold) },
+                title = { 
+                    Column {
+                        Text("AEGIS Cloud Intelligence", fontWeight = FontWeight.Bold)
+                        if (isOnlineMode) {
+                            Text(
+                                "AI Guardian: Cloud Active",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SafeGreen
+                            )
+                        } else if (isModelLoaded) {
+                            Text(
+                                "AI Guardian: Privacy Mode (Offline)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SafeGreen
+                            )
+                        } else {
+                            Text(
+                                "AI Guardian: Initializing...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Privacy", style = MaterialTheme.typography.labelSmall)
+                        Switch(
+                            checked = !isOnlineMode,
+                            onCheckedChange = { viewModel.togglePrivacyMode(it) },
+                            modifier = Modifier.scale(0.7f)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -89,9 +133,9 @@ fun AssistantScreen(
                             onValueChange = { inputText = it },
                             modifier = Modifier.weight(1f),
                             placeholder = { Text("Ask about cybersecurity...") },
-                            shape = RoundedCornerShape(24.dp),
+                            shape = AegisPillShape,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AegisPrimaryLight,
+                                focusedBorderColor = AegisPrimary,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outline
                             )
                         )
@@ -118,7 +162,7 @@ fun AssistantScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             GradientTopBar()
             
-            if (!isModelLoaded) {
+            if (!isOnlineMode && !isModelLoaded) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -163,20 +207,50 @@ fun AssistantScreen(
                                     modifier = Modifier.padding(bottom = 8.dp)
                                 )
                             }
-                            Button(
-                                onClick = { viewModel.triggerInstall() },
+                            
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = AegisPrimaryLight)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Filled.Download, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Install Local Guardian Engine (3.8GB)")
+                                Button(
+                                    onClick = { viewModel.triggerInstall() },
+                                    modifier = Modifier.weight(1f),
+                                    shape = AegisButtonShape,
+                                    colors = ButtonDefaults.buttonColors(containerColor = AegisPrimary, contentColor = Color.Black)
+                                ) {
+                                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Download", fontWeight = FontWeight.Bold)
+                                }
+                                
+                                OutlinedButton(
+                                    onClick = { viewModel.triggerScan() },
+                                    modifier = Modifier.weight(1f),
+                                    shape = AegisButtonShape,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AegisPrimary)
+                                ) {
+                                    Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp), tint = AegisPrimary)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Scan", fontWeight = FontWeight.Bold, color = AegisPrimary)
+                                }
+
+                                OutlinedButton(
+                                    onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = AegisButtonShape,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AegisPrimary)
+                                ) {
+                                    Icon(Icons.Filled.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp), tint = AegisPrimary)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Choose", fontWeight = FontWeight.Bold, color = AegisPrimary)
+                                }
                             }
+                            
                             Text(
                                 "Gemma 3N: 100% Offline AI reasoning",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(top = 4.dp)
+                                modifier = Modifier.padding(top = 8.dp)
                             )
                         }
                     }
@@ -225,12 +299,13 @@ private fun ChatBubble(
     ) {
         Surface(
             shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (message.isUser) 16.dp else 4.dp,
-                bottomEnd = if (message.isUser) 4.dp else 16.dp
+                topStart = 20.dp,
+                topEnd = 20.dp,
+                bottomStart = if (message.isUser) 20.dp else 4.dp,
+                bottomEnd = if (message.isUser) 4.dp else 20.dp
             ),
-            color = color
+            color = color,
+            tonalElevation = 2.dp
         ) {
             Text(
                 text = message.text,

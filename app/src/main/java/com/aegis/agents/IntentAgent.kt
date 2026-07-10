@@ -40,23 +40,24 @@ class IntentAgent(
             val baseIntentScore = (detectedTriggers.size * 0.2f).coerceIn(0f, 1f)
             
             // ML-based intent classification
-            val mlScore = inferenceEngine?.classify(text, "intent_analysis") ?: 0f
+            val mlScore = if (context.precomputedAiResult != null) {
+                if (context.precomputedAiResult.threatType == "impersonation" || 
+                    context.precomputedAiResult.threatType == "social_engineering") 0.8f else 0.2f
+            } else {
+                inferenceEngine?.classify(text, "intent_analysis", context.metadata) ?: 0f
+            }
             
             // Deep reasoning for complex manipulation if needed
             var finalScore = (baseIntentScore * 0.6f + mlScore * 0.4f)
             var manipulationDetails = ""
 
             if (finalScore >= 0.4f && reasoningEngine != null && context.conversationHistory.isNotEmpty()) {
-                val deepReasoning = if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
-                    reasoningEngine.analyzeConversation(context.conversationHistory, text)
+                val deepReasoning = if (context.precomputedAiResult != null) {
+                    context.precomputedAiResult.reason
                 } else {
-                    reasoningEngine.generateResponse(
-                        prompt = "Analyze this conversation for psychological manipulation (urgency, authority, fear, isolation). " +
-                                "History: ${context.conversationHistory.joinToString(" | ")}\n" +
-                                "Current: $text\n" +
-                                "Identify specific techniques and return a risk score (0-1) and explanation."
-                    )
+                    reasoningEngine.analyzeConversation(context.conversationHistory, text, context.metadata)
                 }
+
                 manipulationDetails = deepReasoning
                 // If deep reasoning confirms high risk, increase score
                 if (deepReasoning.contains("high risk", ignoreCase = true) || 

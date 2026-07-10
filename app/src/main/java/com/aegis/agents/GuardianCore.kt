@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 
 class GuardianCore(
     private val agents: List<GuardianAgent>,
-    private val memoryRepository: GuardianMemoryRepository? = null,
-    private val gemmaEngine: GemmaInferenceEngine? = null
+    val memoryRepository: GuardianMemoryRepository? = null,
+    val gemmaEngine: com.aegis.ai.GemmaInferenceEngine? = null,
+    private val aiOperationManager: com.aegis.ai.AIOperationManager? = null
 ) {
 
     private val engine = GuardianEngine(agents, memoryRepository, gemmaEngine)
@@ -56,6 +57,19 @@ class GuardianCore(
                 context
             }
 
+            // --- QUOTA PROTECTION: PRE-COMPUTE AI ANALYSIS ONCE ---
+            // If this is a high-priority request (Chatbot or User-Triggered), 
+            // we do ONE deep AI analysis and share it with all agents.
+            val finalContext = if (enrichedContext.text != null && 
+                (enrichedContext.metadata["source_type"] == "CHATBOT" || 
+                 enrichedContext.metadata["force_ai_analysis"] == "true")) {
+                
+                val aiResult = gemmaEngine?.detectThreatWithAI(enrichedContext.text, enrichedContext.metadata)
+                enrichedContext.copy(precomputedAiResult = aiResult)
+            } else {
+                enrichedContext
+            }
+
             if (chatId != null && context.text != null) {
                 memoryRepository?.storeConversationMessage(
                     chatId = chatId,
@@ -64,7 +78,7 @@ class GuardianCore(
                 )
             }
 
-            val result = engine.analyze(enrichedContext)
+            val result = engine.analyze(finalContext)
 
             _lastAnalysis.value = result
             _analysisResults.tryEmit(result)
@@ -144,11 +158,11 @@ class GuardianCore(
             .flatMap { it.agentResults }
             .filter { it.agentName in agents }
 
-        if (results.isEmpty()) return 0f
+        if (results.isEmpty()) return 1.0f // Default to perfect score if no data
 
-        return (results.sumOf { it.threatLevel.value.toDouble() } / results.size)
-            .toFloat()
-            .coerceIn(0f, 1f)
+        val avgThreat = results.sumOf { it.threatLevel.value.toDouble() } / results.size
+        // Normalize 0..4 to 1..0 (where 0 threat = 1.0 score, 4 threat = 0.0 score)
+        return (1.0 - (avgThreat / 4.0)).toFloat().coerceIn(0f, 1f)
     }
 
     fun getOverallSafetyScore(): Float =

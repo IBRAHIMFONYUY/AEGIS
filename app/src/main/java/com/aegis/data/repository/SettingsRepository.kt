@@ -49,5 +49,6 @@ class SettingsRepository(private val settingsDao: SettingsDao) {
         const val KEY_SAFETY_SCORE = "safety_score"
         const val KEY_USER_NAME = "user_name"
         const val KEY_ONBOARDING_COMPLETE = "onboarding_complete"
+        const val KEY_PRIVACY_MODE = "privacy_mode"
     }
 }

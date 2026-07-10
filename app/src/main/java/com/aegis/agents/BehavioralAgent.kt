@@ -36,11 +36,11 @@ class BehavioralAgent(
             
             // ML-based behavioral analysis using task-specific AI
             val mlScore = if (inferenceEngine is com.aegis.ai.GemmaInferenceEngine && context.conversationHistory.isNotEmpty()) {
-                val summary = inferenceEngine.summarizeConversation(context.conversationHistory)
+                val summary = inferenceEngine.summarizeConversation(context.conversationHistory, context.metadata)
                 // Use summary to adjust score (heuristic for now)
                 if (summary.contains("suspicious", ignoreCase = true)) 0.6f else 0.2f
             } else {
-                inferenceEngine?.classify(text, "behavioral_analysis") ?: 0f
+                inferenceEngine?.classify(text, "behavioral_analysis", context.metadata) ?: 0f
             }
 
             // Combine anomaly detection with ML

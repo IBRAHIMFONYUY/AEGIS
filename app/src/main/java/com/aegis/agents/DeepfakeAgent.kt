@@ -43,7 +43,7 @@ class DeepfakeAgent(
                 analyzeMedia(context, hasImage, hasAudio)
             } else 0f
 
-            val mlScore = inferenceEngine?.classify(text, "deepfake_detection") ?: 0f
+            val mlScore = inferenceEngine?.classify(text, "deepfake_detection", context.metadata) ?: 0f
 
             // Weighted combination: Text (30%), Media (40%), ML (30%)
             val combinedScore = (textScore * 0.3f + mediaScore * 0.4f + mlScore * 0.3f).coerceIn(0f, 1f)

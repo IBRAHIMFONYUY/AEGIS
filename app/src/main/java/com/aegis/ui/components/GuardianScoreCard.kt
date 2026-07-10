@@ -37,7 +37,7 @@ fun GuardianScoreCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = AegisCardShape,
         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
         colors = CardDefaults.cardColors(
             containerColor = SurfaceCard
@@ -178,7 +178,7 @@ private fun ScoreCategoryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(AegisButtonShape)
             .background(SurfaceDarkHigh.copy(alpha = 0.5f))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

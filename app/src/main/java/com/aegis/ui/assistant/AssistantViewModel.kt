@@ -21,6 +21,10 @@ class AssistantViewModel @Inject constructor(
         MutableStateFlow(true).asStateFlow()
     }
 
+
+
+
+
     val loadProgress: StateFlow<Float> = if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
         reasoningEngine.loadProgress
     } else {
@@ -31,6 +35,12 @@ class AssistantViewModel @Inject constructor(
         reasoningEngine.isLoading
     } else {
         MutableStateFlow(false).asStateFlow()
+    }
+
+    val isOnlineMode: StateFlow<Boolean> = if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+        reasoningEngine.useOnlineMode
+    } else {
+        MutableStateFlow(true).asStateFlow()
     }
 
     private val _downloadProgress = MutableStateFlow<Int?>(null)
@@ -67,6 +77,29 @@ class AssistantViewModel @Inject constructor(
             viewModelScope.launch {
                 reasoningEngine.loadModel()
             }
+        }
+    }
+
+    fun triggerScan() {
+        triggerLoad()
+    }
+
+    fun importModel(uri: android.net.Uri) {
+        if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+            viewModelScope.launch {
+                val success = reasoningEngine.importModel(uri)
+                if (success) {
+                    reasoningEngine.loadModel()
+                } else {
+                    _installError.value = "Failed to import model from file."
+                }
+            }
+        }
+    }
+
+    fun togglePrivacyMode(enabled: Boolean) {
+        if (reasoningEngine is com.aegis.ai.GemmaInferenceEngine) {
+            reasoningEngine.setPrivacyMode(enabled)
         }
     }
 
@@ -109,7 +142,8 @@ class AssistantViewModel @Inject constructor(
             }
 
             val response = try {
-                reasoningEngine.generateResponse(text, context)
+                val metadata = mapOf("force_ai_analysis" to "true", "source_type" to "CHATBOT")
+                reasoningEngine.generateResponse(text, context, metadata)
             } catch (e: Exception) {
                 "I apologize, I'm having trouble processing that right now. Please ensure your local guardian engine is active."
             }

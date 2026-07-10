@@ -1,8 +1,8 @@
 package com.aegis.ai
 
 interface InferenceEngine {
-    suspend fun classify(text: String, modelType: String): Float
-    suspend fun analyzeText(text: String, modelType: String): Map<String, Float>
+    suspend fun classify(text: String, modelType: String, metadata: Map<String, String> = emptyMap()): Float
+    suspend fun analyzeText(text: String, modelType: String, metadata: Map<String, String> = emptyMap()): Map<String, Float>
     suspend fun isModelLoaded(modelType: String): Boolean
     suspend fun loadModel(modelType: String): Boolean
     fun getAvailableModels(): List<ModelInfo>

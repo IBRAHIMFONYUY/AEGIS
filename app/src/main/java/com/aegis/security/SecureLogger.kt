@@ -1,7 +1,7 @@
 package com.aegis.security
 
 import android.content.Context
-import android.util.Log
+import timber.log.Timber
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -30,7 +30,7 @@ class SecureLogger(private val context: Context) {
 
     private fun log(level: LogLevel, message: String) {
         val logMessage = "${dateFormat.format(Date())} [${level.name}] $message"
-        Log.d(TAG, logMessage)
+        Timber.tag(TAG).d(logMessage)
 
         if (level == LogLevel.SECURITY) {
             writeToFile(logMessage, "security.log")
@@ -48,7 +48,7 @@ class SecureLogger(private val context: Context) {
                 writer.appendLine(message)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to write log", e)
+            Timber.tag(TAG).e(e, "Failed to write log")
         }
     }
 
