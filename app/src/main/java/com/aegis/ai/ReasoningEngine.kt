@@ -45,9 +45,30 @@ interface ReasoningEngine {
      */
     fun getModelInfo(): ModelInfo
 
+    suspend fun summarizeConversation(
+        history: List<String>
+    ): String
+
+
+
+    /**
+     * Analyze a conversation for:
+     * - manipulation
+     * - social engineering
+     * - coercion
+     * - scams
+     */
+    suspend fun analyzeConversation(
+        history: List<String>,
+        currentMessage: String
+    ): String
+
     /**
      * OPTIONAL SAFETY CHECK (NEW)
      * Ensures engine is ready before inference.
      */
     suspend fun ensureReady(): Boolean = isModelLoaded()
 }
+
+
+

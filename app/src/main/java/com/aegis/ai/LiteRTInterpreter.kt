@@ -5,9 +5,26 @@ import java.io.File
 import java.nio.ByteBuffer
 
 /**
+ * Abstraction over anything that can run token-in/logits-out inference the way
+ * LLMRuntime needs. LiteRTInterpreter (the real TFLite-backed implementation below)
+ * is final with a private constructor by design — it should only ever be built
+ * through its factory methods, which is the right encapsulation for production use.
+ * But that also means it can't be subclassed for tests. This interface exists so a
+ * mock/fake implementation can stand in for it wherever LLMRuntime needs an
+ * interpreter, without touching the real class's guarantees.
+ */
+interface LiteRTInterpreterOps {
+    fun run(input: Any, output: Any)
+    fun runForMultipleInputsOutputs(inputs: Array<Any>, outputs: Map<Int, Any>)
+    fun getInputIndex(name: String): Int
+    fun getOutputIndex(name: String): Int
+    fun close()
+}
+
+/**
  * Wrapper for the LiteRT (formerly TFLite) Interpreter to support Gemma 3N and other models.
  */
-class LiteRTInterpreter private constructor(private val interpreter: Interpreter) {
+class LiteRTInterpreter private constructor(private val interpreter: Interpreter) : LiteRTInterpreterOps {
 
     class Options {
         private var numThreads: Int = 4
@@ -23,7 +40,7 @@ class LiteRTInterpreter private constructor(private val interpreter: Interpreter
             this.useNNAPI = useNNAPI
             return this
         }
-        
+
         fun setUseGPU(useGPU: Boolean): Options {
             this.useGPU = useGPU
             return this
@@ -51,19 +68,19 @@ class LiteRTInterpreter private constructor(private val interpreter: Interpreter
         }
     }
 
-    fun run(input: Any, output: Any) {
+    override fun run(input: Any, output: Any) {
         interpreter.run(input, output)
     }
 
-    fun runForMultipleInputsOutputs(inputs: Array<Any>, outputs: Map<Int, Any>) {
+    override fun runForMultipleInputsOutputs(inputs: Array<Any>, outputs: Map<Int, Any>) {
         interpreter.runForMultipleInputsOutputs(inputs, outputs)
     }
 
-    fun getInputIndex(name: String): Int = interpreter.getInputIndex(name)
-    
-    fun getOutputIndex(name: String): Int = interpreter.getOutputIndex(name)
+    override fun getInputIndex(name: String): Int = interpreter.getInputIndex(name)
 
-    fun close() {
+    override fun getOutputIndex(name: String): Int = interpreter.getOutputIndex(name)
+
+    override fun close() {
         interpreter.close()
     }
 }

@@ -170,7 +170,7 @@ fun AssistantScreen(
                             ) {
                                 Icon(Icons.Filled.Download, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Install Local Guardian Engine (1.5GB)")
+                                Text("Install Local Guardian Engine (3.8GB)")
                             }
                             Text(
                                 "Gemma 3N: 100% Offline AI reasoning",

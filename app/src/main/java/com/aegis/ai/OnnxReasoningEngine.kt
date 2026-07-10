@@ -70,4 +70,68 @@ class OnnxReasoningEngine(
         // Simplified detokenizer
         return "Deep AI Analysis: Based on the provided signals, I have evaluated this interaction as potentially manipulative. I recommend verifying the source independently before proceeding with any financial requests."
     }
+    override suspend fun summarizeConversation(
+        history: List<String>
+    ): String = withContext(Dispatchers.IO) {
+
+        val prompt = """
+        Summarize the following conversation.
+
+        Identify:
+        - suspicious behavior
+        - manipulation attempts
+        - scams
+        - harassment
+        - threats
+
+        Conversation:
+
+        ${history.joinToString("\n")}
+
+    """.trimIndent()
+
+
+        generateResponse(prompt)
+    }
+    override suspend fun analyzeConversation(
+        history: List<String>,
+        currentMessage: String
+    ): String = withContext(Dispatchers.IO) {
+
+
+        val prompt = """
+        You are AEGIS Intent Analysis Engine.
+
+        Analyze this conversation.
+
+        Conversation history:
+
+        ${history.joinToString("\n")}
+
+
+        Current message:
+
+        $currentMessage
+
+
+        Analyze:
+        - Social engineering
+        - Psychological manipulation
+        - Scam indicators
+        - Urgency tactics
+        - Authority impersonation
+        - Isolation techniques
+
+
+        Provide:
+        - Risk level
+        - Attack technique
+        - Explanation
+        - Recommended action
+
+    """.trimIndent()
+
+
+        generateResponse(prompt)
+    }
 }

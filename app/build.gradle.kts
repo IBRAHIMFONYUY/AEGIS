@@ -1,9 +1,24 @@
+import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("com.google.devtools.ksp")
+
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.dagger.hilt.android")
+    id("com.google.devtools.ksp")
+}
+
+
+
+
+// 2. Then, near the top of the file, before android { ... }:
+val localProps = Properties()
+val localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localProps.load(localPropsFile.inputStream())
+    localProps.forEach { (key, value) ->
+        project.extra.set(key.toString(), value)
+    }
 }
 
 android {
@@ -16,6 +31,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+        buildConfigField("String", "HF_TOKEN", "\"${project.findProperty("HF_TOKEN") ?: ""}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -40,8 +56,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+
+
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     splits {
@@ -49,7 +70,7 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-            isUniversalApk = false
+            isUniversalApk = true
         }
     }
 
@@ -68,15 +89,18 @@ android {
     }
 }
 
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
+
+    implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
-
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -84,11 +108,15 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")
 
+
+    implementation("com.google.dagger:hilt-android:2.57.1")
+    ksp("com.google.dagger:hilt-compiler:2.57.1")
+
     implementation("androidx.navigation:navigation-compose:2.8.5")
 
-    implementation("androidx.room:room-runtime:2.7.0-alpha11")
-    implementation("androidx.room:room-ktx:2.7.0-alpha11")
-    ksp("androidx.room:room-compiler:2.7.0-alpha11")
+    implementation("androidx.room:room-runtime:2.8.0")
+    implementation("androidx.room:room-ktx:2.8.0")
+    ksp("androidx.room:room-compiler:2.8.0")
 
     implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
@@ -104,7 +132,7 @@ dependencies {
 
     implementation("com.google.ai.edge.litert:litert:1.1.0")
     implementation("com.google.ai.edge.litert:litert-support:1.1.0")
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.12.0")
+
 
     implementation("com.google.mediapipe:tasks-genai:0.10.35")
 
@@ -132,8 +160,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Hilt
-    implementation("com.google.dagger:hilt-android:2.54")
-    ksp("com.google.dagger:hilt-android-compiler:2.54")
+    ksp("com.google.dagger:hilt-android-compiler:2.55")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

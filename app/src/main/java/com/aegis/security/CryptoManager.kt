@@ -119,11 +119,17 @@ class CryptoManager {
 
     fun generateDatabasePassphrase(): ByteArray {
         return try {
+            // Ensure RSA key exists before trying to use it
+            if (!keyStore.containsAlias(RSA_KEY_ALIAS)) {
+                generateRSAKeyPair()
+            }
             tryGeneratePassphrase()
         } catch (e: Exception) {
             // Self-healing: if the key is misconfigured (e.g. missing signature padding from a previous version),
             // delete it and try to regenerate once.
-            if (e is InvalidKeyException || e.cause is InvalidKeyException || e.message?.contains("padding") == true) {
+            if (e is InvalidKeyException || e.cause is InvalidKeyException || 
+                e.message?.contains("padding") == true || e.message?.contains("getEncoded") == true ||
+                e is NullPointerException) {
                 keyStore.deleteEntry(RSA_KEY_ALIAS)
                 generateRSAKeyPair()
                 try {
@@ -138,7 +144,8 @@ class CryptoManager {
 
     private fun tryGeneratePassphrase(): ByteArray {
         val signature = Signature.getInstance("SHA256withRSA")
-        val privateKey = keyStore.getKey(RSA_KEY_ALIAS, null) as PrivateKey
+        val privateKey = keyStore.getKey(RSA_KEY_ALIAS, null) as? PrivateKey 
+            ?: throw SecurityException("RSA key not found or invalid")
         signature.initSign(privateKey)
         signature.update("aegis_db_seed_2024".toByteArray())
         val signatureBytes = signature.sign()
