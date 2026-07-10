@@ -9,12 +9,13 @@ import kotlinx.coroutines.withContext
 
 class ScamAgent(
     private val inferenceEngine: InferenceEngine? = null,
-    private val threatIntelClient: ThreatIntelClient? = null
+    private val threatIntelClient: ThreatIntelClient? = null,
+    private val gemmaEngine: com.aegis.ai.GemmaInferenceEngine? = null
 ) : GuardianAgent {
 
     override val name = "ScamAgent"
-    override val version = "1.0.0"
-    override val description = "Detects phishing, fraud, and scam attempts in text and URLs"
+    override val version = "2.0.0"
+    override val description = "Detects phishing, fraud, and scam attempts in text and URLs using AI"
 
     private val scamKeywords = listOf(
         "urgent", "bank", "account", "verify", "password", "credit card",
@@ -50,7 +51,7 @@ class ScamAgent(
             val url = context.url
 
             val ruleBasedScore = ruleBasedAnalysis(text, url)
-            val mlScore = inferenceEngine?.let { mlAnalysis(text) } ?: 0f
+            val mlScore = inferenceEngine?.let { mlAnalysis(text, context.metadata) } ?: 0f
             
             var cloudScore = 0f
             if (url != null) {
@@ -118,7 +119,16 @@ class ScamAgent(
         return score.coerceIn(0f, 1f)
     }
 
-    private suspend fun mlAnalysis(text: String): Float {
+    private suspend fun mlAnalysis(text: String, metadata: Map<String, String> = emptyMap()): Float {
+        // Try Gemini AI first for better accuracy
+        if (gemmaEngine != null) {
+            val threatAnalysis = gemmaEngine.detectThreatWithAI(text, metadata)
+            return if (threatAnalysis.isThreat && threatAnalysis.threatType == "scam") {
+                threatAnalysis.confidence
+            } else {
+                0f
+            }
+        }
         return inferenceEngine?.classify(text, "scam_detection") ?: 0f
     }
     

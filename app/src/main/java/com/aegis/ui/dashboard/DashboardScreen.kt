@@ -45,6 +45,9 @@ fun DashboardScreen(
     val userName by viewModel.userName.collectAsState()
     val protectionStats by viewModel.protectionStats.collectAsState()
     val recentThreats by viewModel.recentThreats.collectAsState()
+    
+    // Real-time analysis results
+    val analysisResults by guardianCore.analysisResults.collectAsState(initial = emptyList())
 
     val isProtected = overallScore >= SAFE_THRESHOLD
 

@@ -32,6 +32,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         buildConfigField("String", "HF_TOKEN", "\"${project.findProperty("HF_TOKEN") ?: ""}\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"${project.findProperty("GEMINI_API_KEY") ?: ""}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -169,6 +170,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
 
     implementation("com.google.code.gson:gson:2.11.0")
+
+    // Gemini API
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 

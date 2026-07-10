@@ -23,6 +23,23 @@ object AIModule {
     @Singleton
     fun provideGemmaInferenceEngine(@ApplicationContext context: Context): GemmaInferenceEngine =
         GemmaInferenceEngine(context)
+    
+    @Provides
+    @Singleton
+    fun provideGeminiAIManager(@ApplicationContext context: Context): GeminiAIManager =
+        GeminiAIManager(context)
+    
+    @Provides
+    @Singleton
+    fun provideAIOperationManager(
+        @ApplicationContext context: Context,
+        gemmaEngine: GemmaInferenceEngine,
+        geminiAIManager: GeminiAIManager
+    ): AIOperationManager {
+        val manager = AIOperationManager(context)
+        manager.setEngines(gemmaEngine, geminiAIManager)
+        return manager
+    }
 
     @Provides
     @Singleton
@@ -52,10 +69,11 @@ object AIModule {
         inferenceEngine: InferenceEngine,
         reasoningEngine: ReasoningEngine,
         imageAnalyzer: ImageAnalyzer,
-        threatIntelClient: ThreatIntelClient
+        threatIntelClient: ThreatIntelClient,
+        gemmaEngine: GemmaInferenceEngine
     ): List<GuardianAgent> {
         val baseAgents = listOf(
-            ScamAgent(inferenceEngine, threatIntelClient),
+            ScamAgent(inferenceEngine, threatIntelClient, gemmaEngine),
             PrivacyAgent(inferenceEngine),
             CyberbullyingAgent(inferenceEngine),
             MisinformationAgent(inferenceEngine),

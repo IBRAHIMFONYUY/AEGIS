@@ -195,7 +195,20 @@ fun ThreatAlertUI(
             val coachExplanation = result.agentResults.find { it.agentName == "GuardianCoach" }?.reason
             val primaryReason = result.agentResults.maxByOrNull { it.threatLevel.value }?.reason 
                 ?: "Potential manipulation detected."
+            
+            val threatMessage = result.context.text ?: "No message content"
+            val guidance = result.agentResults.maxByOrNull { it.threatLevel.value }?.suggestedAction
+                ?: "Exercise caution with this content."
 
+            Text(
+                text = "Threat Detected:",
+                style = MaterialTheme.typography.labelMedium,
+                color = color,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
             Text(
                 text = coachExplanation ?: primaryReason,
                 style = MaterialTheme.typography.bodyMedium,
@@ -203,8 +216,42 @@ fun ThreatAlertUI(
                 fontWeight = FontWeight.Medium,
                 lineHeight = 20.sp
             )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            if (threatMessage.isNotBlank() && threatMessage != "No message content") {
+                Text(
+                    text = "Content:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = threatMessage.take(150) + if (threatMessage.length > 150) "..." else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.8f),
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            
+            if (guidance != null) {
+                Text(
+                    text = "Recommended Action:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SafeGreen,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = guidance,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.9f),
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) {

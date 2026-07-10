@@ -23,6 +23,11 @@ class GemmaInferenceEngine(
 
     private val gemmaManager =
         GemmaModelManager(context)
+    
+    private val geminiAIManager = GeminiAIManager(context)
+    
+    private val _useOnlineMode = MutableStateFlow(false)
+    val useOnlineMode: StateFlow<Boolean> = _useOnlineMode.asStateFlow()
 
 
     val isModelLoadedFlow: StateFlow<Boolean>
@@ -49,7 +54,8 @@ class GemmaInferenceEngine(
 
 
         if (!ensureReady()) {
-            return "Model not ready"
+            // Fallback to Gemini API if local model is not available
+            return generateResponseWithGemini(prompt, context)
         }
 
 
@@ -69,6 +75,20 @@ class GemmaInferenceEngine(
 
             is GenerationResult.Blocked ->
                 "[Blocked] ${result.reason}"
+        }
+    }
+    
+    private suspend fun generateResponseWithGemini(prompt: String, context: String?): String {
+        return try {
+            val fullContext = if (!context.isNullOrBlank()) {
+                "Context:\n$context\n\n"
+            } else {
+                ""
+            }
+            val fullPrompt = "$fullContext$prompt"
+            geminiAIManager.generateResponse(fullPrompt)
+        } catch (e: Exception) {
+            "Error: Failed to generate response with both local and online AI: ${e.localizedMessage}"
         }
     }
 
@@ -131,9 +151,17 @@ class GemmaInferenceEngine(
 
         if(gemmaManager.isModelLoaded.value)
             return true
-
-
-        return loadModel()
+        
+        // Try to initialize local model
+        val localModelLoaded = loadModel()
+        
+        // If local model fails, initialize Gemini as fallback
+        if (!localModelLoaded) {
+            _useOnlineMode.value = true
+            return geminiAIManager.initialize()
+        }
+        
+        return true
     }
 
 
@@ -245,8 +273,38 @@ class GemmaInferenceEngine(
     suspend fun detectScam(
         text:String,
         metadata:Map<String,String>
-    ):Float =
-        classify(text,"scam")
+    ):Float {
+        // Try local model first
+        if (gemmaManager.isModelLoaded.value) {
+            return classify(text, "scam")
+        }
+        
+        // Fallback to Gemini for scam detection
+        val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+        val result = geminiAIManager.analyzeThreat(text, context)
+        return if (result.isThreat && result.threatType == "scam") {
+            result.confidence
+        } else {
+            0f
+        }
+    }
+    
+    suspend fun detectThreatWithAI(
+        text: String,
+        metadata: Map<String, String>
+    ): ThreatAnalysisResult {
+        // Use Gemini for comprehensive threat analysis
+        val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+        return geminiAIManager.analyzeThreat(text, context)
+    }
+    
+    suspend fun analyzeConversationWithAI(
+        messages: List<String>,
+        currentMessage: String,
+        senderInfo: String = ""
+    ): ConversationAnalysisResult {
+        return geminiAIManager.analyzeConversationHistory(messages, currentMessage, senderInfo)
+    }
 
 
 
