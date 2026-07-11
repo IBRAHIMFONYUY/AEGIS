@@ -74,14 +74,17 @@ class DashboardViewModel @Inject constructor(
     val protectionStats: StateFlow<ProtectionSummary> = combine(
         threatRepository.getScamsBlockedCount(getStartOfDay()),
         threatRepository.getLinksBlockedCount(getStartOfDay()),
-        threatRepository.getFakeNewsDetectedCount(getStartOfDay())
-    ) { scams, links, fakeNews ->
+        threatRepository.getFakeNewsDetectedCount(getStartOfDay()),
+        guardianCore.analyticsManager?.analytics ?: MutableStateFlow(com.aegis.ai.analytics.SecurityAnalyticsManager.SecurityStats())
+    ) { scams, links, fakeNews, analytics ->
         ProtectionSummary(
             scamsBlocked = scams,
             linksBlocked = links,
             fakeNewsDetected = fakeNews,
             micSecured = hasPermission(Manifest.permission.RECORD_AUDIO),
-            cameraSecured = hasPermission(Manifest.permission.CAMERA)
+            cameraSecured = hasPermission(Manifest.permission.CAMERA),
+            totalAnalyzed = analytics.totalMessagesAnalyzed,
+            avgConfidence = analytics.averageConfidence
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProtectionSummary())
 
@@ -170,5 +173,7 @@ data class ProtectionSummary(
     val linksBlocked: Int = 0,
     val fakeNewsDetected: Int = 0,
     val micSecured: Boolean = false,
-    val cameraSecured: Boolean = false
+    val cameraSecured: Boolean = false,
+    val totalAnalyzed: Long = 0,
+    val avgConfidence: Float = 0f
 )

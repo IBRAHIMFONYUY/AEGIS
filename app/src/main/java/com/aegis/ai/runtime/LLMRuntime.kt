@@ -18,11 +18,11 @@ class LLMRuntime(
         // Prepare kv cache or other runtime components if needed
     }
 
-    fun classifySafety(text: String): SafetyClassifier.SafetyResult {
+    suspend fun classifySafety(text: String): SafetyClassifier.SafetyResult {
         return safetyClassifier.classify(text)
     }
 
-    fun generate(prompt: String, params: SamplingParams): String {
+    suspend fun generate(prompt: String, params: SamplingParams): String {
         // Check input safety
         val inputSafety = safetyClassifier.classify(prompt)
         if (inputSafety.isUnsafe) {
@@ -86,7 +86,7 @@ class LLMRuntime(
         return generatedText.ifEmpty { "Unable to generate response." }
     }
 
-    fun generateStream(prompt: String, params: SamplingParams, tokenCallback: (String) -> Unit) {
+    suspend fun generateStream(prompt: String, params: SamplingParams, tokenCallback: (String) -> Unit) {
         // Check input safety
         val inputSafety = safetyClassifier.classify(prompt)
         if (inputSafety.isUnsafe) {

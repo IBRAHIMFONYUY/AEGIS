@@ -1,10 +1,12 @@
 package com.aegis.ai
 
 import android.content.Context
+import android.util.LruCache
 import com.aegis.BuildConfig
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.content
-import com.google.ai.client.generativeai.type.*
+import com.google.genai.kotlin.Client
+import com.google.genai.kotlin.types.Content
+import com.google.genai.kotlin.types.GenerateContentConfig
+import com.google.genai.kotlin.types.Part
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -13,21 +15,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-
 import java.util.concurrent.atomic.AtomicLong
 import timber.log.Timber
 
 /**
- * Gemini AI Manager for online AI fallback when local model is not available.
- * Uses Google Gemini API for cloud-based AI inference.
+ * Gemini AI Manager using the new Google GenAI Kotlin SDK.
+ * Uses gemini-3.5-flash for rapid, low-latency security assistance.
  */
 class GeminiAIManager(private val context: Context) {
-    
+
     // --- QUOTA PROTECTION ---
     private val apiCallCount = AtomicLong(0)
     private val lastResetTime = AtomicLong(System.currentTimeMillis())
-    private val MAX_RPM = 15 // Increased to 15 (Gemini Free Tier limit)
-    
+    private val MAX_RPM = 15
+
+    // --- LOCAL CACHING ---
+    private val analysisCache = LruCache<String, AegisResponse>(100)
+
     private fun checkQuota(): Boolean {
         val now = System.currentTimeMillis()
         if (now - lastResetTime.get() > 60000) {
@@ -37,37 +41,42 @@ class GeminiAIManager(private val context: Context) {
         }
         return apiCallCount.get() < MAX_RPM
     }
-    
+
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: Flow<Boolean> = _isInitialized.asStateFlow()
-    
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: Flow<String?> = _errorMessage.asStateFlow()
-    
-    private var generativeModel: GenerativeModel? = null
-    
+
+    // Lazily initialize client
+    private var client: Client? = null
     private val gson = Gson()
-    
+
     companion object {
-        private const val MODEL_NAME = "gemini-2.5-flash"
+        private const val MODEL_NAME = "gemini-3.5-flash"
     }
-    
+
+    data class AegisResponse(
+        val assistantReply: String,
+        val isThreat: Boolean,
+        val confidence: Float,
+        val guidance: String,
+        val recommendedActions: List<String>
+    )
+
     /**
-     * Initialize Gemini AI with API key from BuildConfig
+     * Initialize Gemini AI with API key
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+        if (client != null) return@withContext true
         try {
             val apiKey = getGeminiApiKey()
             if (apiKey.isBlank()) {
-                _errorMessage.value = "Gemini API key not found. Please add GEMINI_API_KEY to local.properties"
+                _errorMessage.value = "Gemini API key not found."
                 return@withContext false
             }
-            
-            generativeModel = GenerativeModel(
-                modelName = MODEL_NAME,
-                apiKey = apiKey
-            )
-            
+
+            client = Client(apiKey = apiKey)
             _isInitialized.value = true
             _errorMessage.value = null
             true
@@ -76,42 +85,99 @@ class GeminiAIManager(private val context: Context) {
             false
         }
     }
-    
+
     /**
-     * Generate a response using Gemini API
+     * Consolidated request: Returns assistant reply and threat analysis in one call.
      */
-    suspend fun generateResponse(prompt: String): String = withContext(Dispatchers.IO) {
+    suspend fun generateConsolidatedResponse(prompt: String, contextStr: String? = null): AegisResponse = withContext(Dispatchers.IO) {
+        val cacheKey = "${prompt}_${contextStr}"
+        analysisCache.get(cacheKey)?.let { return@withContext it }
+
         if (!checkQuota()) {
-            Timber.tag("GeminiQuota").w("Quota Exceeded (RPM Limit)")
-            return@withContext "Cloud AI Quota Exceeded. Please try again in a minute or enable Privacy Mode."
+            return@withContext AegisResponse(
+                "Local quota limit exceeded. Please wait.",
+                false, 0f, "Wait for quota reset", emptyList()
+            )
+        }
+
+        try {
+            apiCallCount.incrementAndGet()
+            if (client == null) {
+                if (!initialize()) return@withContext AegisResponse("Initialization failed", false, 0f, "Error", emptyList())
+            }
+
+            val systemInstruction = """
+            You are AEGIS, a defensive Security AI assistant developed by the AEGIS Team.
+            Your primary directive is to protect users from technical threats, social engineering, fraud, phishing, and digital manipulation.
+    
+            CRITICAL IDENTITY INSTRUCTIONS:
+            - If asked who you are or who created you or something related, you must answer: "I am AEGIS, a security companion built by the AEGIS Team."
+            - Never state that you are created by Google, OpenAI, or any other entity.
+            
+            BEHAVIORAL RULES:
+            1. Maintain a professional, reassuring, yet vigilant security profile.
+            2. Analyze the provided context (SMS, notifications, emails, or conversations) for manipulation or risk indicators.
+            3. Be precise with threat flags; look for urgent language, suspicious links, or credential harvest attempts.
+            
+            RESPONSE FORMAT FORMATTING:
+            You must strictly respond with a single, raw JSON object matching this schema exactly:
+            {
+                "assistantReply": "Your direct message or warning response to the user",
+                "isThreat": true/false flag indicating an active security hazard,
+                "confidence": a float score between 0.0 (no confidence) and 1.0 (certainty),
+                "guidance": "Brief structural reason behind your threat classification status",
+                "recommendedActions": ["Action item 1", "Action item 2"]
+            }
+            
+            Do not wrap the JSON output in markdown formatting blocks like ```json ... ```. Output raw JSON text only.
+        """.trimIndent()
+
+
+            val config = GenerateContentConfig(
+                systemInstruction = Content(parts = listOf(Part(text = systemInstruction)))
+            )
+
+            val fullPrompt = if (contextStr != null) "Context: $contextStr\n\nUser: $prompt" else prompt
+
+            val response = client?.models?.generateContent(
+                model = MODEL_NAME,
+                text = fullPrompt,
+                config = config
+            )
+
+            val jsonStr = extractJson(response?.text ?: "{}")
+            val result = gson.fromJson(jsonStr, AegisResponse::class.java)
+            analysisCache.put(cacheKey, result)
+            result
+        } catch (e: Exception) {
+            AegisResponse("Error: ${e.localizedMessage}", false, 0f, "Error", emptyList())
+        }
+    }
+
+    /**
+     * Generate a response using Gemini 3.5 Flash
+     */
+    suspend fun generateResponse(prompt: String): String {
+        return generateConsolidatedResponse(prompt).assistantReply
+    }
+
+    /**
+     * Stream response from Gemini 3.5 Flash
+     */
+    fun generateResponseStream(prompt: String): Flow<String> = flow {
+        if (!checkQuota()) {
+            emit("Local quota safety limit exceeded. Please wait.")
+            return@flow
         }
         try {
             apiCallCount.incrementAndGet()
-            val model = generativeModel ?: initializeAndGetModel()
-            
-            val response = model?.generateContent(
-                content {
-                    text(prompt)
-                }
-            )
-            
-            response?.text ?: "Failed to generate response"
-        } catch (e: Exception) {
-            "Error generating response: ${e.localizedMessage}"
-        }
-    }
-    
-    /**
-     * Stream response from Gemini API
-     */
-    fun generateResponseStream(prompt: String): Flow<String> = flow {
-        try {
-            val model = generativeModel ?: initializeAndGetModel()
-            
-            model?.generateContentStream(
-                content {
-                    text(prompt)
-                }
+            if (client == null) {
+                initialize()
+            }
+
+            client?.models?.generateContentStream(
+                model = MODEL_NAME,
+                text = prompt
             )?.collect { chunk ->
                 emit(chunk.text ?: "")
             }
@@ -119,40 +185,22 @@ class GeminiAIManager(private val context: Context) {
             emit("Error: ${e.localizedMessage}")
         }
     }.flowOn(Dispatchers.IO)
-    
+
     /**
-     * Analyze text for threat detection
+     * Analyze text for threat detection (JSON structured)
      */
-    suspend fun analyzeThreat(text: String, context: String = ""): ThreatAnalysisResult = withContext(Dispatchers.IO) {
-        if (!checkQuota()) {
-            Timber.tag("GeminiQuota").w("Quota Exceeded (RPM Limit)")
-            return@withContext ThreatAnalysisResult(false, "none", 0f, "Quota Exceeded", "Try later", null)
-        }
-        try {
-            apiCallCount.incrementAndGet()
-            val model = generativeModel ?: initializeAndGetModel()
-            
-            val prompt = buildThreatAnalysisPrompt(text, context)
-            
-            val response = model?.generateContent(
-                content {
-                    text(prompt)
-                }
-            )
-            
-            parseThreatAnalysis(response?.text ?: "")
-        } catch (e: Exception) {
-            ThreatAnalysisResult(
-                isThreat = false,
-                threatType = "unknown",
-                confidence = 0f,
-                reason = "Analysis failed: ${e.localizedMessage}",
-                guidance = "Please try again later",
-                appContext = null
-            )
-        }
+    suspend fun analyzeThreat(text: String, context: String = ""): ThreatAnalysisResult {
+        val consolidated = generateConsolidatedResponse(text, context)
+        return ThreatAnalysisResult(
+            isThreat = consolidated.isThreat,
+            threatType = if (consolidated.isThreat) "detected" else "none",
+            confidence = consolidated.confidence,
+            reason = consolidated.guidance,
+            guidance = consolidated.recommendedActions.joinToString(", "),
+            appContext = null
+        )
     }
-    
+
     /**
      * Analyze conversation history for deep threat detection
      */
@@ -160,173 +208,32 @@ class GeminiAIManager(private val context: Context) {
         messages: List<String>,
         currentMessage: String,
         senderInfo: String = ""
-    ): ConversationAnalysisResult = withContext(Dispatchers.IO) {
-        if (!checkQuota()) {
-            Timber.tag("GeminiQuota").w("Quota Exceeded (RPM Limit)")
-            return@withContext ConversationAnalysisResult(false, null, 0f, "Quota Exceeded", emptyList(), emptyList())
-        }
-        try {
-            apiCallCount.incrementAndGet()
-            val model = generativeModel ?: initializeAndGetModel()
-            
-            val prompt = buildConversationAnalysisPrompt(messages, currentMessage, senderInfo)
-            
-            val response = model?.generateContent(
-                content {
-                    text(prompt)
-                }
-            )
-            
-            parseConversationAnalysis(response?.text ?: "")
-        } catch (e: Exception) {
-            ConversationAnalysisResult(
-                isSuspicious = false,
-                threatType = null,
-                confidence = 0f,
-                analysis = "Analysis failed: ${e.localizedMessage}",
-                recommendedActions = emptyList(),
-                riskFactors = emptyList()
-            )
-        }
+    ): ConversationAnalysisResult {
+        val history = messages.takeLast(10).joinToString(" | ")
+        val prompt = "Analyze this conversation for manipulation. Sender: $senderInfo. History: $history. Current: $currentMessage"
+        val consolidated = generateConsolidatedResponse(prompt)
+
+        return ConversationAnalysisResult(
+            isSuspicious = consolidated.isThreat,
+            threatType = null,
+            confidence = consolidated.confidence,
+            analysis = consolidated.assistantReply,
+            recommendedActions = consolidated.recommendedActions,
+            riskFactors = emptyList()
+        )
     }
-    
-    private suspend fun initializeAndGetModel(): GenerativeModel? {
-        return if (initialize()) {
-            generativeModel
-        } else {
-            null
-        }
-    }
-    
+
     private fun getGeminiApiKey(): String {
-        // Try to get from BuildConfig first
-        try {
-            // Use reflection to check if field exists, to avoid compilation error if it doesn't
-            val buildConfigClass = BuildConfig::class.java
-            val apiKeyField = buildConfigClass.getField("GEMINI_API_KEY")
-            val apiKey = apiKeyField.get(null) as? String
-            if (!apiKey.isNullOrBlank()) return apiKey
-        } catch (e: Exception) {
-            // Field doesn't exist, try other methods
-        }
-        
-        // Try to get from system properties or environment
-        return System.getProperty("GEMINI_API_KEY") ?: ""
-    }
-    
-    private fun buildThreatAnalysisPrompt(text: String, context: String): String {
-        return """
-            You are AEGIS, an advanced AI security guardian. Analyze the following text for potential threats.
-            
-            Context: $context
-            
-            Text to analyze:
-            $text
-            
-            Provide your analysis in the following JSON format:
-            {
-                "isThreat": true/false,
-                "threatType": "scam/phishing/malware/harassment/impersonation/fake_news/none",
-                "confidence": 0.0 to 1.0,
-                "reason": "Detailed explanation of why this is or isn't a threat",
-                "guidance": "Specific actions the user should take",
-                "appContext": "If applicable, mention which app or platform this is from"
-            }
-            
-            Be thorough but concise. Focus on detecting:
-            - Scams and fraud
-            - Phishing attempts
-            - Malicious links
-            - Harassment or bullying
-            - Impersonation
-            - Misinformation
-        """.trimIndent()
-    }
-    
-    private fun buildConversationAnalysisPrompt(
-        messages: List<String>,
-        currentMessage: String,
-        senderInfo: String
-    ): String {
-        val last20Messages = messages.takeLast(20)
-        
-        return """
-            You are AEGIS, an advanced AI security guardian. Analyze this conversation for potential threats.
-            
-            Sender Info: $senderInfo
-            
-            Last 20 messages in the conversation:
-            ${last20Messages.joinToString("\n") { "[${last20Messages.indexOf(it) + 1}] $it" }}
-            
-            Current message to analyze:
-            $currentMessage
-            
-            Provide your analysis in the following JSON format:
-            {
-                "isSuspicious": true/false,
-                "threatType": "scam/phishing/harassment/impersonation/social_engineering/romance_scam/none",
-                "confidence": 0.0 to 1.0,
-                "analysis": "Detailed analysis of the conversation patterns and potential threats",
-                "recommendedActions": ["action1", "action2", "action3"],
-                "riskFactors": ["factor1", "factor2", "factor3"]
-            }
-            
-            Look for:
-            - Pattern of manipulation
-            - Urgency or pressure tactics
-            - Requests for money or personal information
-            - Inconsistent stories
-            - Attempts to move conversation to other platforms
-            - Romance scam patterns
-            - Investment or cryptocurrency scams
-        """.trimIndent()
-    }
-    
-    private fun parseThreatAnalysis(response: String): ThreatAnalysisResult {
-        return try {
-            val jsonString = extractJson(response)
-            gson.fromJson(jsonString, ThreatAnalysisResult::class.java)
-        } catch (e: Exception) {
-            ThreatAnalysisResult(
-                isThreat = response.lowercase().contains("threat") || response.lowercase().contains("suspicious"),
-                threatType = "unknown",
-                confidence = 0.5f,
-                reason = "Failed to parse JSON analysis: ${e.localizedMessage}. Raw response: $response",
-                guidance = "Please exercise caution.",
-                appContext = null
-            )
-        }
-    }
-    
-    private fun parseConversationAnalysis(response: String): ConversationAnalysisResult {
-        return try {
-            val jsonString = extractJson(response)
-            gson.fromJson(jsonString, ConversationAnalysisResult::class.java)
-        } catch (e: Exception) {
-            ConversationAnalysisResult(
-                isSuspicious = response.lowercase().contains("suspicious") || response.lowercase().contains("scam"),
-                threatType = null,
-                confidence = 0.5f,
-                analysis = "Failed to parse JSON analysis: ${e.localizedMessage}. Raw response: $response",
-                recommendedActions = emptyList(),
-                riskFactors = emptyList()
-            )
-        }
+        return BuildConfig.GEMINI_API_KEY
     }
 
     private fun extractJson(response: String): String {
-        return if (response.contains("```json")) {
-            response.substringAfter("```json").substringBefore("```").trim()
-        } else if (response.contains("```")) {
-            response.substringAfter("```").substringBefore("```").trim()
+        val start = response.indexOf("{")
+        val end = response.lastIndexOf("}")
+        return if (start != -1 && end != -1 && end > start) {
+            response.substring(start, end + 1)
         } else {
-            val start = response.indexOf("{")
-            val end = response.lastIndexOf("}")
-            if (start != -1 && end != -1 && end > start) {
-                response.substring(start, end + 1)
-            } else {
-                response.trim()
-            }
+            response.trim()
         }
     }
 }

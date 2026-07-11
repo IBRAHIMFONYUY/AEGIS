@@ -23,7 +23,10 @@ class ThreatRepository(private val threatDao: ThreatDao) {
 
     fun getFakeNewsDetectedCount(since: Long): Flow<Int> = threatDao.getFakeNewsDetectedCount(since)
 
-    suspend fun saveAnalysisResult(result: AnalysisResult) {
+    suspend fun getThreatById(id: Long): ThreatEvent? = threatDao.getThreatById(id)
+
+    suspend fun saveAnalysisResult(result: AnalysisResult): Long? {
+        var firstId: Long? = null
         result.agentResults.forEach { agentResult ->
             val event = ThreatEvent(
                 agentName = agentResult.agentName,
@@ -38,9 +41,11 @@ class ThreatRepository(private val threatDao: ThreatDao) {
                 timestamp = result.timestamp
             )
             if (agentResult.threatLevel.value >= ThreatLevel.SUSPICIOUS.value) {
-                threatDao.insert(event)
+                val id = threatDao.insert(event)
+                if (firstId == null) firstId = id
             }
         }
+        return firstId
     }
 
     suspend fun resolveThreat(id: Long, action: String?) {

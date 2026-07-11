@@ -22,11 +22,13 @@ import java.util.concurrent.atomic.AtomicLong
  * Tier 1: Semantic Cache (Local)
  * Tier 2: AI Flash Model (Cloud)
  */
-class AIOperationManager(private val context: Context) {
+class AIOperationManager(
+    private val context: Context,
+    private val safetyClassifier: SafetyClassifier
+) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val operationMutex = Mutex()
-    private val safetyClassifier = SafetyClassifier()
 
     // Response cache for frequently requested analyses
     private val responseCache = ConcurrentHashMap<String, CachedResponse>()
@@ -72,7 +74,8 @@ class AIOperationManager(private val context: Context) {
         val operationKey = "threat_$textHash"
 
         // --- TIER 0: LOCAL SAFETY CLASSIFIER (ZERO COST) ---
-        val localSafety = safetyClassifier.classify(text)
+        val contextualSource = metadata["source_type"] ?: "Notification"
+        val localSafety = safetyClassifier.classify(text, contextualSource)
         
         // Immediate detection for clear, dangerous threats (e.g. death threats)
         if (localSafety.isUnsafe && localSafety.confidence > 0.8f && 
@@ -91,17 +94,16 @@ class AIOperationManager(private val context: Context) {
             return cached
         }
 
-        // --- TIER 2: CLOUD AI (ONLY IF TRIGGERED OR CHATBOT) ---
-        val shouldCallAI = metadata["force_ai_analysis"] == "true" || 
-                          metadata["source_type"] == "CHATBOT" ||
-                          metadata["deep_scan"] == "true"
-
-        if (shouldCallAI) {
+        // --- TIER 2: AI REASONING (CLOUD FOR CHATBOT ONLY, LOCAL FOR EVERYTHING ELSE) ---
+        val isChatbot = metadata["source_type"] == "CHATBOT"
+        
+        if (isChatbot) {
+            // ONLY Chatbot is allowed to use Cloud Gemini
             return executeOperation(
                 operationKey = operationKey,
                 operation = {
                     if (isQuotaExceeded()) {
-                        Timber.tag("AIOperation").w("Quota Exceeded - Falling back")
+                        Timber.tag("AIOperation").w("Quota Exceeded for Chatbot")
                         return@executeOperation localSafety.toThreatResult("Cloud Quota Exceeded")
                     }
 
@@ -121,9 +123,22 @@ class AIOperationManager(private val context: Context) {
                 useCache = false
             )
         }
+        
+        // FOR ALL OTHER TASKS (Security Scans, Notifications, Background): Use Local Gemma
+        if (gemmaEngine?.isModelLoadedFlow?.value == true) {
+             return executeOperation(
+                operationKey = operationKey,
+                operation = {
+                    val result = gemmaEngine!!.detectThreatWithAI(text, metadata)
+                    cacheResponse(operationKey, result)
+                    result
+                },
+                useCache = false
+            )
+        }
 
-        // Default: If not critical and not forced, remain local to save quota
-        return localSafety.toThreatResult("AEGIS Baseline Protection")
+        // Final Default: Fallback to Device Deep Learning Analysis
+        return localSafety.toThreatResult("AEGIS Device Deep Learning (Fast Path)")
     }
 
     /**

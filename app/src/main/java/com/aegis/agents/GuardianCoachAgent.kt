@@ -58,12 +58,16 @@ class GuardianCoachAgent(
             "You are AEGIS Security Coach. Provide a concise, human-friendly, educational explanation of the detected security risks."
         }
 
+        val sender = context.metadata["sender"] ?: "Unknown Sender"
+        val sourceApp = context.metadata["source_app"] ?: context.sourceApp ?: "Unknown App"
+
         return """
             $personaPrompt
             
             Context Analysis:
             Text: ${context.text ?: "N/A"}
-            Source App: ${context.sourceApp ?: "Unknown"}
+            Sender: $sender
+            App: $sourceApp
             Source Type: ${context.sourceType}
             Is Unknown Sender: ${context.isUnknownSender}
             $chatHistory
@@ -73,7 +77,7 @@ class GuardianCoachAgent(
             $threatReport
             
             Goal:
-            - Explain WHY this is risky in plain language.
+            - Explain WHY this message from $sender in $sourceApp is risky in plain language.
             - If it's cyberbullying, offer emotional validation first.
             - Provide 3 clear, actionable safety steps.
             - If there is chat history, use it to explain WHY the current message is suspicious compared to previous ones.

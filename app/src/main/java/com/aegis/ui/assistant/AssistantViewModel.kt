@@ -132,13 +132,36 @@ class AssistantViewModel @Inject constructor(
         viewModelScope.launch {
             _isTyping.value = true
             
-            // Collect context from recent threats for the AI
-            val recentThreats = guardianCore.getRecentThreats(5)
-            val context = if (recentThreats.isNotEmpty()) {
-                "Recent security events detected:\n" + 
-                recentThreats.joinToString("\n") { "- ${it.overallThreatLevel.label}: ${it.agentResults.firstOrNull()?.reason}" }
-            } else {
-                "No recent threats detected. Device is safe."
+            // Collect deep context for the AI
+            val score = guardianCore.getDetailedGuardianScore()
+            val recentThreats = guardianCore.getRecentThreats(10)
+            val analytics = guardianCore.analyticsManager?.analytics?.value
+            
+            val context = buildString {
+                append("DEVICE SECURITY CONTEXT:\n")
+                append("- Overall Safety Score: ${(score.overall * 100).toInt()}%\n")
+                append("- Privacy Score: ${(score.privacy * 100).toInt()}%\n")
+                append("- Scam Protection: ${(score.scamProtection * 100).toInt()}%\n")
+                append("- Device Health: ${(score.deviceSecurity * 100).toInt()}%\n")
+                
+                if (analytics != null) {
+                    append("\nANALYTICS:\n")
+                    append("- Total Messages Analyzed: ${analytics.totalMessagesAnalyzed}\n")
+                    append("- Threats Blocked: ${analytics.totalThreatsBlocked}\n")
+                    append("- AI Confidence: ${(analytics.averageConfidence * 100).toInt()}%\n")
+                }
+                
+                if (recentThreats.isNotEmpty()) {
+                    append("\nRECENT DETECTED THREATS:\n")
+                    recentThreats.forEach { threat ->
+                        append("- [${threat.overallThreatLevel.label}] ${threat.context.sourceApp ?: "Unknown"}: ${threat.agentResults.firstOrNull()?.reason}\n")
+                    }
+                }
+                
+                append("\nCONVERSATION HISTORY:\n")
+                _messages.value.takeLast(10).forEach { msg ->
+                    append("${if (msg.isUser) "User" else "AI"}: ${msg.text}\n")
+                }
             }
 
             val response = try {

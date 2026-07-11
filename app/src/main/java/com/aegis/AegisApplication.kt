@@ -47,6 +47,9 @@ class AegisApplication : Application() {
     @Inject
     lateinit var gemmaEngine: com.aegis.ai.GemmaInferenceEngine
 
+    @Inject
+    lateinit var securityNotificationManager: com.aegis.services.notification.AegisSecurityNotificationManager
+
     private val applicationScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -81,17 +84,23 @@ class AegisApplication : Application() {
 
                 runCatching {
 
-                    threatRepository.saveAnalysisResult(result)
+                    val threatId = threatRepository.saveAnalysisResult(result)
 
-                    val isHighRisk = result.overallThreatLevel.value >= ThreatLevel.MALICIOUS.value
-                    val isNotification = result.context.sourceType == com.aegis.core.SourceType.NOTIFICATION ||
-                            result.context.sourceType == com.aegis.core.SourceType.WHATSAPP ||
-                            result.context.sourceType == com.aegis.core.SourceType.TELEGRAM ||
-                            result.context.sourceType == com.aegis.core.SourceType.SMS
+                    // Trigger for ALL apps that send notifications (WhatsApp, FB, LinkedIn, etc.)
+                    val isNotificationTrigger = result.context.sourceType != com.aegis.core.SourceType.SCREEN &&
+                                              result.context.sourceType != com.aegis.core.SourceType.UNKNOWN
 
-                    if (isHighRisk && isNotification) {
+                    if (result.overallThreatLevel.value >= ThreatLevel.LIKELY_MALICIOUS.value && isNotificationTrigger) {
                         withContext(Dispatchers.Main.immediate) {
-                            overlayManager.showThreatAlert(result)
+                            // Enriched metadata with the database ID for deep linking
+                            val enrichedResult = if (threatId != null) {
+                                val newMetadata = result.context.metadata.toMutableMap()
+                                newMetadata["db_threat_id"] = threatId.toString()
+                                result.copy(context = result.context.copy(metadata = newMetadata))
+                            } else result
+                            
+                            // Centralized alert trigger: this shows both overlay and notification
+                            securityNotificationManager.showSecurityAlert(enrichedResult)
                         }
                     }
 

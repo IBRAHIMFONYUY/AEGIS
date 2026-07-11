@@ -13,7 +13,7 @@ class GuardianCore(
     private val agents: List<GuardianAgent>,
     val memoryRepository: GuardianMemoryRepository? = null,
     val gemmaEngine: com.aegis.ai.GemmaInferenceEngine? = null,
-    private val aiOperationManager: com.aegis.ai.AIOperationManager? = null
+    val analyticsManager: com.aegis.ai.analytics.SecurityAnalyticsManager? = null
 ) {
 
     private val engine = GuardianEngine(agents, memoryRepository, gemmaEngine)
@@ -82,6 +82,9 @@ class GuardianCore(
 
             _lastAnalysis.value = result
             _analysisResults.tryEmit(result)
+            
+            // Record for analytics
+            analyticsManager?.recordAnalysis(result)
 
             _guardianScore.value = getDetailedGuardianScore()
 

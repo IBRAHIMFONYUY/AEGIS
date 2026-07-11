@@ -28,6 +28,7 @@ import com.aegis.ui.privacy.PrivacyScreen
 import com.aegis.ui.profile.ProfileScreen
 import com.aegis.ui.settings.SettingsScreen
 import com.aegis.ui.threatlog.ThreatLogScreen
+import com.aegis.ui.threatlog.ThreatDetailScreen
 import com.aegis.ui.vault.VaultScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
@@ -52,13 +53,13 @@ val bottomNavItems = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AegisNavGraph(
+    navController: NavHostController = rememberNavController(),
     guardianCore: GuardianCore,
     threatRepository: ThreatRepository,
     safetyRepository: SafetyRepository,
     learningRepository: LearningRepository,
     settingsRepository: SettingsRepository
 ) {
-    val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
@@ -125,6 +126,13 @@ fun AegisNavGraph(
             composable(Screen.ThreatIntel.route) {
                 ThreatLogScreen(
                     threatRepository = threatRepository
+                )
+            }
+            composable("threat_detail/{threatId}") { backStackEntry ->
+                val threatId = backStackEntry.arguments?.getString("threatId")?.toLongOrNull() ?: 0L
+                ThreatDetailScreen(
+                    threatId = threatId,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Profile.route) {

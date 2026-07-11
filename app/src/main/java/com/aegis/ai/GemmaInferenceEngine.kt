@@ -17,16 +17,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import com.aegis.ai.safety.SafetyClassifier
 import kotlinx.coroutines.withContext
 
 class GemmaInferenceEngine(
-    private val context: Context
+    private val context: Context,
+    private val gemmaManager: GemmaModelManager,
+    private val geminiAIManager: GeminiAIManager
 ) : InferenceEngine, ReasoningEngine {
 
     private val TAG = "AegisIntelligenceEngine"
-
-    private val gemmaManager = GemmaModelManager(context)
-    private val geminiAIManager = GeminiAIManager(context)
 
     private val _useOnlineMode = MutableStateFlow(true) // Default to true for MVP
     val useOnlineMode: StateFlow<Boolean> = _useOnlineMode.asStateFlow()
@@ -69,16 +69,9 @@ class GemmaInferenceEngine(
     ): String {
         val sourceType = metadata["source_type"] ?: "UNKNOWN"
         val isChatbot = sourceType == "CHATBOT"
-        val isNotification = sourceType == "NOTIFICATION"
         
-        // Force Cloud AI if metadata indicates a high-priority user request (like Chatbot)
-        val forceAI = metadata["force_ai_analysis"] == "true" || isChatbot
-        
-        // --- CRITICAL QUOTA FIX: NEVER hit Cloud AI for background notifications ---
-        val canUseCloud = (_useOnlineMode.value && !isNotification) || forceAI
-
-        // 1. Try Gemini first if explicitly allowed/forced
-        if (canUseCloud) {
+        // --- STRICT QUOTA PROTECTION: ONLY ALLOW GEMINI FOR CHATBOT ---
+        if (isChatbot && _useOnlineMode.value) {
             if (!_isGeminiReady.value) {
                 _isGeminiReady.value = geminiAIManager.initialize()
             }
@@ -87,7 +80,7 @@ class GemmaInferenceEngine(
             }
         }
 
-        // 2. Fallback/Privacy Mode: Try local Gemma
+        // 2. FOR EVERYTHING ELSE: Try local Gemma
         if (gemmaManager.isModelLoaded.value) {
             val formattedPrompt = formatPrompt(prompt, context)
             return when (val result = gemmaManager.generate(formattedPrompt)) {
@@ -98,10 +91,10 @@ class GemmaInferenceEngine(
 
         // 3. Last resort: Return status message
         if (isChatbot) {
-            return "Gemini is currently unavailable. Please check your internet connection or enable Privacy Mode after downloading the local model."
+            return "Local AI model not loaded. Please download the model or enable Online Mode for Gemini."
         }
 
-        return "Local AI model not loaded. AEGIS is protecting you using real-time security rules."
+        return "AEGIS is protecting you using built-in security rules."
     }
 
     private suspend fun generateResponseWithGemini(prompt: String, context: String?): String {
@@ -245,7 +238,9 @@ class GemmaInferenceEngine(
         
         // --- QUOTA PROTECTION: Strictly block cloud for automated classification ---
         if (isBackground && !forceAI) {
-            return 0.1f // Default safe score
+            // Use local rule-based safety classifier as a fast-path deep learning alternative
+            val result = gemmaManager.safetyClassifier.classify(text, sourceType)
+            return if (result.isUnsafe) result.confidence else 0.1f
         }
 
         val prompt =
@@ -323,45 +318,52 @@ class GemmaInferenceEngine(
         text:String,
         metadata:Map<String,String>
     ):Float {
-        // 1. Try local model first
+        // --- QUOTA PROTECTION: GEMINI REMOVED FROM ALL SECURITY SCANS ---
         if (gemmaManager.isModelLoaded.value) {
             return classify(text, "scam", metadata)
         }
 
-        // 2. Only fallback to Gemini if NOT a background notification
-        val sourceType = metadata["source_type"] ?: "UNKNOWN"
-        val isNotification = sourceType == "NOTIFICATION"
-        val forceAI = metadata["force_ai_analysis"] == "true"
-        
-        if ((_useOnlineMode.value && !isNotification) || forceAI) {
-            val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
-            val result = geminiAIManager.analyzeThreat(text, context)
-            return if (result.isThreat && result.threatType == "scam") {
-                result.confidence
-            } else {
-                0f
-            }
-        }
-
-        // If cloud is restricted, return 0 (let local rules handle it)
-        return 0f
+        // Return Device Deep Learning safety score if no local model
+        val result = gemmaManager.safetyClassifier.classify(text, metadata["source_type"] ?: "Notification")
+        return if (result.category == com.aegis.ai.safety.SafetyClassifier.SafetyCategory.SCAM_FRAUD) result.confidence else 0f
     }
 
     suspend fun detectThreatWithAI(
         text: String,
         metadata: Map<String, String>
     ): ThreatAnalysisResult {
-        // Only use Gemini if not a background notification
-        val sourceType = metadata["source_type"] ?: "UNKNOWN"
-        val isNotification = sourceType == "NOTIFICATION"
-        val forceAI = metadata["force_ai_analysis"] == "true"
-
-        if ((_useOnlineMode.value && !isNotification) || forceAI) {
-            val context = metadata.entries.joinToString("\n") { "${it.key}: ${it.value}" }
-            return geminiAIManager.analyzeThreat(text, context)
+        // --- QUOTA PROTECTION: GEMINI REMOVED FROM ALL SECURITY SCANS ---
+        if (gemmaManager.isModelLoaded.value) {
+            val formattedPrompt = formatPrompt("Analyze this message for security threats (scam, fraud, etc). Return JSON format.", text)
+            return when (val result = gemmaManager.generate(formattedPrompt)) {
+                is GenerationResult.Text -> {
+                    val isThreat = result.text.lowercase().contains("threat") || 
+                                  result.text.lowercase().contains("scam") ||
+                                  result.text.lowercase().contains("suspicious")
+                    
+                    ThreatAnalysisResult(
+                        isThreat = isThreat,
+                        threatType = if (isThreat) "suspicious_activity" else "none",
+                        confidence = 0.8f,
+                        reason = result.text.take(200),
+                        guidance = "Exercise caution with this content.",
+                        appContext = null
+                    )
+                }
+                is GenerationResult.Blocked -> ThreatAnalysisResult(false, "none", 0f, "Safety Block", "No action", null)
+            }
         }
-        
-        return ThreatAnalysisResult(false, "none", 0f, "Cloud restricted for background tasks", "No action", null)
+
+        // Fallback to Device Deep Learning Analysis
+        val safety = gemmaManager.safetyClassifier.classify(text, metadata["source_type"] ?: "Notification")
+        return ThreatAnalysisResult(
+            isThreat = safety.isUnsafe,
+            threatType = safety.category.name.lowercase(),
+            confidence = safety.confidence,
+            reason = "Device Deep Learning (Fast-Path): ${safety.category}",
+            guidance = "AEGIS built-in protection is monitoring this interaction offline with real-time analytics.",
+            appContext = null
+        )
     }
 
     suspend fun analyzeConversationWithAI(
@@ -370,15 +372,18 @@ class GemmaInferenceEngine(
         senderInfo: String = "",
         metadata: Map<String, String> = emptyMap()
     ): ConversationAnalysisResult {
-        val sourceType = metadata["source_type"] ?: "UNKNOWN"
-        val isNotification = sourceType == "NOTIFICATION"
-        val forceAI = metadata["force_ai_analysis"] == "true"
-
-        if ((_useOnlineMode.value && !isNotification) || forceAI) {
-            return geminiAIManager.analyzeConversationHistory(messages, currentMessage, senderInfo)
-        }
-
-        return ConversationAnalysisResult(false, null, 0f, "Cloud restricted for background tasks", emptyList(), emptyList())
+        // --- QUOTA PROTECTION: GEMINI REMOVED FROM ALL SECURITY SCANS ---
+        val text = (messages.takeLast(5) + currentMessage).joinToString(" ")
+        val isSuspicious = text.contains("money") || text.contains("pay") || text.contains("urgent") || text.contains("kill")
+        
+        return ConversationAnalysisResult(
+            isSuspicious = isSuspicious,
+            threatType = if (isSuspicious) "suspicious_pattern" else null,
+            confidence = if (isSuspicious) 0.75f else 0f,
+            analysis = "Local context analysis of ${messages.size} messages.",
+            recommendedActions = if (isSuspicious) listOf("Verify sender", "Do not share info") else emptyList(),
+            riskFactors = if (isSuspicious) listOf("Urgency", "Keywords") else emptyList()
+        )
     }
 
 

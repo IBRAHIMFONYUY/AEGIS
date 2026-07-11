@@ -235,7 +235,7 @@ fun AssistantScreen(
                                 }
 
                                 OutlinedButton(
-                                    onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                                    onClick = { filePickerLauncher.launch(arrayOf("application/octet-stream")) },
                                     modifier = Modifier.weight(1f),
                                     shape = AegisButtonShape,
                                     border = androidx.compose.foundation.BorderStroke(1.dp, AegisPrimary)

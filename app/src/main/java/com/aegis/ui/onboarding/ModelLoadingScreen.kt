@@ -1,6 +1,9 @@
 package com.aegis.ui.onboarding
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -26,13 +29,27 @@ import com.aegis.ui.theme.*
 fun ModelLoadingScreen(
     gemmaEngine: GemmaInferenceEngine,
     onLoadComplete: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onDownloadModel: () -> Unit = {}
 ) {
     val isLoaded by gemmaEngine.isModelLoadedFlow.collectAsState()
     val isLoading by gemmaEngine.isLoading.collectAsState()
     val progress by gemmaEngine.loadProgress.collectAsState()
     val error by gemmaEngine.errorMessage.collectAsState()
     val scope = rememberCoroutineScope()
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                val success = gemmaEngine.importModel(it)
+                if (success) {
+                    gemmaEngine.loadModel()
+                }
+            }
+        }
+    }
     
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -146,7 +163,6 @@ fun ModelLoadingScreen(
                 ) {
                     when {
                         error != null -> {
-                            // Error State
                             Icon(
                                 Icons.Filled.ErrorOutline,
                                 contentDescription = "Error",
@@ -154,26 +170,44 @@ fun ModelLoadingScreen(
                                 modifier = Modifier.size(48.dp)
                             )
                             Text(
-                                "Model Loading Failed",
+                                "Gemma 3N not found",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = DangerRed
                             )
                             Text(
-                                error ?: "Unknown error",
+                                error ?: "Model file not found on device",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
-                            Button(
-                                onClick = { scope.launch { gemmaEngine.loadModel() } },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = CyberBlue
-                                ),
-                                shape = AegisButtonShape
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Filled.Refresh, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Retry")
+                                Button(
+                                    onClick = {
+                                        filePickerLauncher.launch(arrayOf("application/octet-stream"))
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = CyberBlue
+                                    ),
+                                    shape = AegisButtonShape
+                                ) {
+                                    Icon(Icons.Filled.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Choose Model")
+                                }
+                                OutlinedButton(
+                                    onClick = onDownloadModel,
+                                    modifier = Modifier.weight(1f),
+                                    shape = AegisButtonShape,
+                                    border = BorderStroke(1.dp, CyberBlue)
+                                ) {
+                                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp), tint = CyberBlue)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Download Model", color = CyberBlue)
+                                }
                             }
                         }
                         isLoading -> {

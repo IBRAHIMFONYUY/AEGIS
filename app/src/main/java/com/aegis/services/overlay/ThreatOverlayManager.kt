@@ -1,6 +1,7 @@
 package com.aegis.services.overlay
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import timber.log.Timber
@@ -10,7 +11,9 @@ import android.view.WindowManager
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GppBad
@@ -53,53 +56,70 @@ class ThreatOverlayManager(private val context: Context) {
             return
         }
 
-        CoroutineScope(Dispatchers.Main).launch {
-            hideOverlay()
+        // Use immediate main scope for faster display
+        CoroutineScope(Dispatchers.Main.immediate).launch {
+            try {
+                // Remove previous view immediately before setting up new one
+                currentView?.let {
+                    try { windowManager.removeViewImmediate(it) } catch (_: Exception) {}
+                    currentView = null
+                }
 
-            val composeView = ComposeView(context).apply {
-                setContent {
-                    AegisTheme(darkTheme = true) {
-                        ThreatAlertUI(
-                            result = result,
-                            onDismiss = { hideOverlay() }
-                        )
+                val composeView = ComposeView(context).apply {
+                    setContent {
+                        AegisTheme(darkTheme = true) {
+                            ThreatAlertUI(
+                                result = result,
+                                onDismiss = { hideOverlay() },
+                                onSecureData = {
+                                    val threatId = result.context.metadata["db_threat_id"]
+                                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                                        action = "com.aegis.ACTION_NAV_TO_THREAT"
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                        putExtra("nav_to_threat_id", threatId)
+                                    }
+                                    context.startActivity(intent)
+                                    hideOverlay()
+                                }
+                            )
+                        }
                     }
                 }
-            }
 
-            val lifecycleOwner = MyLifecycleOwner()
-            lifecycleOwner.performRestore(null)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-            
-            composeView.setViewTreeLifecycleOwner(lifecycleOwner)
-            composeView.setViewTreeViewModelStoreOwner(lifecycleOwner)
-            composeView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                val lifecycleOwner = MyLifecycleOwner()
+                lifecycleOwner.performRestore(null)
+                lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+                lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
+                lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+                
+                composeView.setViewTreeLifecycleOwner(lifecycleOwner)
+                composeView.setViewTreeViewModelStoreOwner(lifecycleOwner)
+                composeView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
 
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
-                else WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP
-                y = 50 
-            }
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
+                    else WindowManager.LayoutParams.TYPE_PHONE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or 
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP
+                    y = 150 
+                }
 
-            try {
                 windowManager.addView(composeView, params)
                 currentView = composeView
                 
-                // Critical threats stay longer, suspicious ones fade after 8s
-                val duration = if (result.overallThreatLevel.value >= ThreatLevel.MALICIOUS.value) 20000L else 8000L
-                delay(duration)
+                // Keep it on screen for 15s (shorter to ensure performance)
+                delay(15000)
                 hideOverlay()
             } catch (e: Exception) {
-                Timber.tag("ThreatOverlayManager").e(e, "Error adding overlay view")
+                Timber.tag("ThreatOverlay").e(e, "Error adding overlay view")
             }
         }
     }
@@ -137,7 +157,8 @@ class ThreatOverlayManager(private val context: Context) {
 @Composable
 fun ThreatAlertUI(
     result: AnalysisResult,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onSecureData: () -> Unit
 ) {
     val level = result.overallThreatLevel
     val color = when (level) {
@@ -147,15 +168,21 @@ fun ThreatAlertUI(
         else -> WarningYellow
     }
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
+            .padding(16.dp)
+            .heightIn(max = 600.dp), // Height limit for scrollability
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C1E)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+        color = Color(0xFF1A1C1E),
+        tonalElevation = 12.dp,
+        shadowElevation = 12.dp
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -234,7 +261,7 @@ fun ThreatAlertUI(
                     )
                 }
                 Text(
-                    text = threatMessage.take(150) + if (threatMessage.length > 150) "..." else "",
+                    text = threatMessage,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.8f),
                     lineHeight = 16.sp
@@ -266,7 +293,7 @@ fun ThreatAlertUI(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
-                    onClick = onDismiss,
+                    onClick = onSecureData,
                     colors = ButtonDefaults.buttonColors(containerColor = color),
                     shape = RoundedCornerShape(12.dp)
                 ) {

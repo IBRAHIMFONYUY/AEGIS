@@ -21,22 +21,42 @@ object AIModule {
 
     @Provides
     @Singleton
-    fun provideGemmaInferenceEngine(@ApplicationContext context: Context): GemmaInferenceEngine =
-        GemmaInferenceEngine(context)
-    
-    @Provides
-    @Singleton
     fun provideGeminiAIManager(@ApplicationContext context: Context): GeminiAIManager =
         GeminiAIManager(context)
-    
+
+    @Provides
+    @Singleton
+    fun provideSafetyClassifier(geminiAIManager: GeminiAIManager): com.aegis.ai.safety.SafetyClassifier {
+        return com.aegis.ai.safety.SafetyClassifier().apply {
+            setGeminiManager(geminiAIManager)
+        }
+    }
+
+    @Provides
+    @Singleton
+    fun provideGemmaModelManager(
+        @ApplicationContext context: Context,
+        safetyClassifier: com.aegis.ai.safety.SafetyClassifier
+    ): GemmaModelManager = GemmaModelManager(context, safetyClassifier)
+
+    @Provides
+    @Singleton
+    fun provideGemmaInferenceEngine(
+        @ApplicationContext context: Context,
+        gemmaModelManager: GemmaModelManager,
+        geminiAIManager: GeminiAIManager
+    ): GemmaInferenceEngine =
+        GemmaInferenceEngine(context, gemmaModelManager, geminiAIManager)
+
     @Provides
     @Singleton
     fun provideAIOperationManager(
         @ApplicationContext context: Context,
         gemmaEngine: GemmaInferenceEngine,
-        geminiAIManager: GeminiAIManager
+        geminiAIManager: GeminiAIManager,
+        safetyClassifier: com.aegis.ai.safety.SafetyClassifier
     ): AIOperationManager {
-        val manager = AIOperationManager(context)
+        val manager = AIOperationManager(context, safetyClassifier)
         manager.setEngines(gemmaEngine, geminiAIManager)
         return manager
     }
@@ -99,8 +119,9 @@ object AIModule {
     fun provideGuardianCore(
         agents: @JvmSuppressWildcards List<GuardianAgent>,
         memoryRepository: GuardianMemoryRepository,
-        gemmaEngine: GemmaInferenceEngine
-    ): GuardianCore = GuardianCore(agents, memoryRepository, gemmaEngine)
+        gemmaEngine: GemmaInferenceEngine,
+        analyticsManager: com.aegis.ai.analytics.SecurityAnalyticsManager
+    ): GuardianCore = GuardianCore(agents, memoryRepository, gemmaEngine, analyticsManager)
 
     @Provides
     @Singleton

@@ -22,6 +22,12 @@ class AegisNotificationListener : NotificationListenerService() {
     
     @Inject
     lateinit var aiOperationManager: AIOperationManager
+    
+    @Inject
+    lateinit var securityNotificationManager: AegisSecurityNotificationManager
+
+    private val alertedHashes = mutableSetOf<Int>()
+    private val maxHistory = 100
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
@@ -42,49 +48,51 @@ class AegisNotificationListener : NotificationListenerService() {
             .joinToString(" ")
 
         if (combinedText.length > 5) {
+            val msgHash = "${packageName}_$combinedText".hashCode()
+            if (alertedHashes.contains(msgHash)) return
+            
             val sourceType = when {
                 packageName.contains("com.whatsapp") -> SourceType.WHATSAPP
                 packageName.contains("org.telegram") -> SourceType.TELEGRAM
                 packageName.contains("com.facebook.orca") -> SourceType.MESSENGER
+                packageName.contains("com.facebook.katana") -> SourceType.NOTIFICATION
+                packageName.contains("com.linkedin.android") -> SourceType.NOTIFICATION
+                packageName.contains("com.instagram.android") -> SourceType.NOTIFICATION
+                packageName.contains("com.twitter.android") || packageName.contains("com.x.android") -> SourceType.NOTIFICATION
                 packageName.contains("com.google.android.apps.messaging") ||
                 packageName.contains("com.android.mms") ||
                 packageName.contains("com.samsung.android.messaging") -> SourceType.SMS
                 packageName.contains("com.google.android.gm") ||
-                packageName.contains("com.android.email") -> SourceType.EMAIL
+                packageName.contains("com.android.email") ||
+                packageName.contains("com.microsoft.office.outlook") -> SourceType.EMAIL
                 packageName.contains("com.android.chrome") ||
                 packageName.contains("org.mozilla.firefox") -> SourceType.BROWSER
                 else -> SourceType.NOTIFICATION
             }
 
             val chatId = "${packageName}_$title"
-            
-            scope.launch {
-                // For chat apps, perform deep conversation analysis
-                if (sourceType in listOf(SourceType.WHATSAPP, SourceType.TELEGRAM, SourceType.MESSENGER)) {
-                    performDeepConversationAnalysis(
-                        chatId = chatId,
-                        sender = title,
-                        currentMessage = combinedText,
-                        packageName = packageName,
-                        sourceType = sourceType
+
+            scope.launch(Dispatchers.Default) {
+                // Deduplication check
+                if (alertedHashes.contains(msgHash)) return@launch
+
+                val context = AnalysisContext(
+                    text = combinedText,
+                    sourceApp = packageName,
+                    sourceType = sourceType,
+                    metadata = mapOf(
+                        "notification_title" to title,
+                        "sender" to title,
+                        "chat_id" to chatId,
+                        "source_type" to "NOTIFICATION"
                     )
-                } else {
-                    // Standard analysis for other notifications
-                    val context = AnalysisContext(
-                        text = combinedText,
-                        sourceApp = packageName,
-                        sourceType = sourceType,
-                        metadata = mapOf(
-                            "notification_title" to title,
-                            "notification_tag" to (sbn.tag ?: ""),
-                            "notification_id" to sbn.id.toString(),
-                            "sender" to title,
-                            "chat_id" to chatId,
-                            "source_type" to "NOTIFICATION"
-                        )
-                    )
-                    guardianCore.analyze(context)
-                }
+                )
+                
+                guardianCore.analyze(context)
+                
+                // Track to prevent spam
+                alertedHashes.add(msgHash)
+                if (alertedHashes.size > maxHistory) alertedHashes.remove(alertedHashes.first())
             }
         }
     }
@@ -101,7 +109,6 @@ class AegisNotificationListener : NotificationListenerService() {
             val conversationHistory = guardianCore.memoryRepository?.getConversationHistory(chatId) ?: emptyList<String>()
             
             // Perform analysis via optimized manager
-            // We use standard analyzeThreatOptimized first to see if local tier can handle it
             val context = AnalysisContext(
                 text = currentMessage,
                 sourceApp = packageName,
@@ -116,15 +123,7 @@ class AegisNotificationListener : NotificationListenerService() {
             )
 
             val result = guardianCore.analyze(context)
-            
-            // For "Real & Legit" threats found by local/cache tiers, show alert immediately
-            if (result.overallThreatLevel.value >= com.aegis.core.ThreatLevel.MALICIOUS.value) {
-                showThreatOverlay(result, packageName)
-            } else if (result.overallThreatLevel.value == com.aegis.core.ThreatLevel.SUSPICIOUS.value) {
-                // If only SUSPICIOUS, we don't call Gemini yet.
-                // We could show a subtle "Check with AEGIS" option if we had that UI, 
-                // but for now, we follow the "only when requested" rule to save quota.
-            }
+            // REMOVED direct alert trigger. Let AegisApplication handle it via flow.
         } catch (e: Exception) {
             // ... fallback logic
             // Fallback to basic analysis on error

@@ -18,12 +18,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.compose.rememberNavController
 import com.aegis.agents.GuardianCore
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import com.aegis.data.repository.LearningRepository
 import com.aegis.data.repository.SafetyRepository
@@ -82,12 +83,17 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val _intentFlow = MutableStateFlow<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        _intentFlow.value = intent
         enableEdgeToEdge()
 
         setContent {
+            val currentIntent by _intentFlow.collectAsState(initial = null)
+            val intentToUse = currentIntent
 
             val darkModeSetting by settingsRepository
                 .observeString(SettingsRepository.KEY_DARK_MODE)
@@ -98,7 +104,23 @@ class MainActivity : ComponentActivity() {
 
             AegisTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    val navController = rememberNavController()
+                    
+                    // Handle deep link from overlay
+                    LaunchedEffect(intentToUse) {
+                        val threatId = intentToUse?.getStringExtra("nav_to_threat_id")
+                        if (threatId != null || intentToUse?.action == "com.aegis.ACTION_NAV_TO_THREAT") {
+                            val id = threatId ?: intentToUse?.getStringExtra("nav_to_threat_id")
+                            if (id != null) {
+                                navController.navigate("threat_detail/$id")
+                                // Clear intent so it doesn't re-trigger on rotation
+                                _intentFlow.value = null
+                            }
+                        }
+                    }
+
                     AegisNavGraph(
+                        navController = navController,
                         guardianCore = guardianCore,
                         threatRepository = threatRepository,
                         safetyRepository = safetyRepository,
@@ -110,6 +132,12 @@ class MainActivity : ComponentActivity() {
         }
 
         requestPermissions()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        _intentFlow.value = intent
     }
 
     override fun onResume() {

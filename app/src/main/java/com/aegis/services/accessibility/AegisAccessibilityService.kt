@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import com.aegis.AegisApplication
 import com.aegis.core.AnalysisContext
 import com.aegis.core.SourceType
 import com.aegis.agents.GuardianCore
@@ -19,6 +18,12 @@ class AegisAccessibilityService : AccessibilityService() {
     
     @Inject
     lateinit var guardianCore: GuardianCore
+    
+    @Inject
+    lateinit var securityNotificationManager: com.aegis.services.notification.AegisSecurityNotificationManager
+
+    @Inject
+    lateinit var threatOverlayManager: com.aegis.services.overlay.ThreatOverlayManager
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -37,97 +42,57 @@ class AegisAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        val packageName = event.packageName?.toString() ?: ""
+        
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                val packageName = event.packageName?.toString() ?: ""
-                // Detect permission dialogs
+                // Keep only critical window state monitoring (like permission dialogs)
                 if (packageName == "com.google.android.permissioncontroller" || 
                     packageName == "com.android.permissioncontroller") {
-                    handlePermissionDialog(event)
-                }
-                
-                val root = rootInActiveWindow
-                if (root != null) {
-                    val pageText = extractAllText(root)
-                    if (pageText.length > 10) {
-                        analyzeText(pageText, packageName)
+                    val root = rootInActiveWindow
+                    if (root != null) {
+                        handlePermissionDialog(root, packageName)
+                        root.recycle()
                     }
-                    root.recycle()
-                }
-            }
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, 
-            AccessibilityEvent.TYPE_VIEW_CLICKED,
-            AccessibilityEvent.TYPE_VIEW_FOCUSED -> {
-                val text = extractText(event)
-                if (text != null && text.length > 5) {
-                    analyzeText(text, event.packageName?.toString())
-                }
-            }
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                val root = rootInActiveWindow
-                if (root != null) {
-                    val pageText = extractAllText(root)
-                    if (pageText.length > 10) {
-                        analyzeText(pageText, event.packageName?.toString())
-                    }
-                    root.recycle()
                 }
             }
         }
     }
 
-    private fun handlePermissionDialog(event: AccessibilityEvent) {
-        val root = rootInActiveWindow ?: return
+    private fun handlePermissionDialog(root: AccessibilityNodeInfo, packageName: String) {
         val dialogText = extractAllText(root)
-        val packageName = event.packageName?.toString()
-        
         scope.launch {
             val context = AnalysisContext(
-                text = "Permission Request Detected: $dialogText",
+                text = "Permission Request: $dialogText",
                 sourceApp = packageName,
                 sourceType = SourceType.SCREEN,
                 metadata = mapOf(
                     "source" to "accessibility_service",
                     "is_permission_dialog" to "true",
-                    "dialog_content" to dialogText
+                    "force_local_ai" to "true"
                 )
             )
             guardianCore.analyze(context)
         }
-        root.recycle()
-    }
-
-    private fun extractText(event: AccessibilityEvent): String? {
-        val source = event.source ?: return event.text?.joinToString(" ")
-        val text = source.text?.toString()
-        source.recycle()
-        return text
     }
 
     private fun extractAllText(node: AccessibilityNodeInfo): String {
-        val texts = mutableListOf<String>()
-        collectText(node, texts)
-        return texts.joinToString(" ")
+        val sb = StringBuilder()
+        collectTextOptimized(node, sb)
+        return sb.toString()
     }
 
-    private fun collectText(node: AccessibilityNodeInfo, texts: MutableList<String>) {
-        node.text?.toString()?.let { texts.add(it) }
+    private fun collectTextOptimized(node: AccessibilityNodeInfo, sb: StringBuilder) {
+        if (sb.length > 2000) return
+        
+        node.text?.toString()?.let { 
+            if (it.isNotBlank()) {
+                sb.append(it).append(" ")
+            }
+        }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            collectText(child, texts)
-            child.recycle()
-        }
-    }
-
-    private fun analyzeText(text: String, sourceApp: String?) {
-        scope.launch {
-            val context = AnalysisContext(
-                text = text,
-                sourceApp = sourceApp,
-                sourceType = SourceType.SCREEN,
-                metadata = mapOf("source" to "accessibility_service")
-            )
-            guardianCore.analyze(context)
+            collectTextOptimized(child, sb)
         }
     }
 

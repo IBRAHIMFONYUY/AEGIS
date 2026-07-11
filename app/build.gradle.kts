@@ -83,6 +83,13 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/NOTICE.txt"
+            excludes += "META-INF/ASL2.0"
         }
         jniLibs {
             useLegacyPackaging = true
@@ -172,8 +179,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.11.0")
 
     // Gemini API
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
-
+    implementation("com.google.genai:google-genai-kotlin-android:0.2.0")
     debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 
     testImplementation("junit:junit:4.13.2")
